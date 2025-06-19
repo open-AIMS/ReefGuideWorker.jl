@@ -73,11 +73,23 @@ WORKDIR "${APP_SRC_DIR}"
 # Copy project and manifest - includes Manifest-v1.11 etc
 COPY Project.toml Manifest*.toml ./
 
+# Add custom fork of GeometryOps
+# TODO: Remove once fix that resolves precompilation issues gets released
+#       (blocks system image generation)
+RUN julia --project=@app \
+    -e 'using Pkg; Pkg.add(url="https://github.com/ConnectedSystems/GeometryOps.jl", rev="main");'
+
+# Add custom fork of ReefGuide
+# TODO: remove once git is no longer needed to install ReefGuide
+RUN julia --project=@app \
+    -e 'using Pkg; Pkg.add(url="https://github.com/open-AIMS/ReefGuide.jl", rev="main");'
+
 # Install the ReefGuideWorker source code and configure it as a development
 # package in the @app shared environment.
 # Should be v speedy if the .toml file is unchanged, because all the
 # dependencies *should* already be installed.
 COPY ./src src
+
 RUN julia --project=@app \
     -e  'using Pkg; Pkg.develop(PackageSpec(path=pwd())); Pkg.precompile(); using ReefGuideWorker;'
 
