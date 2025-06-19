@@ -51,6 +51,10 @@ struct JobContext
     aws_region::String
     "S3 endpoint"
     s3_endpoint::OptionalValue{String}
+    "Caching path"
+    cache_path::String
+    "Data path"
+    data_path::String
 
     "Constructor that takes all fields"
     function JobContext(;
@@ -59,7 +63,9 @@ struct JobContext
         http_client::AuthApiClient,
         task_metadata::Any,
         aws_region::String="ap-southeast-2",
-        s3_endpoint::OptionalValue{String}=nothing
+        s3_endpoint::OptionalValue{String}=nothing,
+        cache_path::String,
+        data_path::String
     )
         return new(
             job,
@@ -67,7 +73,9 @@ struct JobContext
             http_client,
             task_metadata,
             aws_region,
-            s3_endpoint
+            s3_endpoint,
+            cache_path,
+            data_path
         )
     end
 end
@@ -123,7 +131,9 @@ function process(::TypedJobHandler, context::JobContext)
             HandlerContext(;
                 storage_uri=storage_uri,
                 aws_region=context.aws_region,
-                s3_endpoint=context.s3_endpoint
+                s3_endpoint=context.s3_endpoint,
+                cache_path=context.cache_path,
+                data_path=context.data_path
             )
         )
 
@@ -396,7 +406,9 @@ function process_job_completely(worker::WorkerService, job::Job)
             http_client=worker.http_client,
             task_metadata=worker.metadata,
             aws_region=worker.config.aws_region,
-            s3_endpoint=worker.config.s3_endpoint
+            s3_endpoint=worker.config.s3_endpoint,
+            cache_path=worker.config.cache_path,
+            data_path=worker.config.data_path
         )
 
         # Process the job with the handler

@@ -14,3 +14,6 @@ include("http_client.jl")
 include("handlers.jl")
 include("storage_client.jl")
 include("worker.jl")
+
+# Additions
+include("handler_helpers.jl")

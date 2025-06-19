@@ -22,6 +22,10 @@ struct WorkerConfig
     aws_region::String
     "S3 Endpoint for local S3 compatibility"
     s3_endpoint::OptionalValue{String}
+    "What is the path to cache files into?"
+    cache_path::String
+    "What is the path to the data files?"
+    data_path::String
 
     # Kwarg constructor
     function WorkerConfig(;
@@ -34,7 +38,9 @@ struct WorkerConfig
         poll_interval_ms::Int64=2000,
         # Idle timeout 5 minutes by default
         idle_timeout_ms::Int64=5 * 60 * 1000,
-        s3_endpoint::OptionalValue{String}=nothing
+        s3_endpoint::OptionalValue{String}=nothing,
+        cache_path::String,
+        data_path::String
     )
         return new(
             api_endpoint,
@@ -44,7 +50,9 @@ struct WorkerConfig
             poll_interval_ms,
             idle_timeout_ms,
             aws_region,
-            s3_endpoint
+            s3_endpoint,
+            cache_path,
+            data_path
         )
     end
 end
@@ -122,6 +130,16 @@ function load_config_from_env()::WorkerConfig
         )
     end
 
+    data_path = get_env("DATA_PATH")
+    if isempty(data_path)
+        throw(ConfigValidationError("DATA_PATH", "Must supply a data path"))
+    end
+
+    cache_path = get_env("CACHE_PATH")
+    if isempty(cache_path)
+        throw(ConfigValidationError("CACHE_PATH", "Must supply a cache path"))
+    end
+
     # Username and password
     username = get_env("WORKER_USERNAME")
     if isempty(username)
@@ -160,7 +178,9 @@ function load_config_from_env()::WorkerConfig
         poll_interval_ms,
         idle_timeout_ms,
         aws_region,
-        s3_endpoint
+        s3_endpoint,
+        cache_path,
+        data_path
     )
 end
 

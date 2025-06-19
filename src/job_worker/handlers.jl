@@ -11,7 +11,8 @@ handle jobs for this worker.
 Enum for job types matching the API definition
 """
 @enum JobType begin
-    # Here is where you would add job types you want to handle
+    SUITABILITY_ASSESSMENT
+    REGIONAL_ASSESSMENT
     TEST
 end
 
@@ -22,7 +23,6 @@ Enum for storage schemes matching the API definition
 """
 @enum StorageScheme begin
     S3
-    # Add more storage schemes as needed
 end
 
 """
@@ -51,12 +51,16 @@ struct HandlerContext
     storage_uri::String
     aws_region::String
     s3_endpoint::OptionalValue{String}
+    cache_path::String
+    data_path::String
 
     function HandlerContext(;
         storage_uri::String, aws_region::String="ap-southeast-2",
-        s3_endpoint::OptionalValue{String}=nothing
+        s3_endpoint::OptionalValue{String}=nothing,
+        cache_path::String,
+        data_path::String
     )
-        return new(storage_uri, aws_region, s3_endpoint)
+        return new(storage_uri, aws_region, s3_endpoint, cache_path, data_path)
     end
 end
 
@@ -223,6 +227,220 @@ function handle_job(
 end
 
 #
+# ===================
+# REGIONAL_ASSESSMENT 
+# ===================
+#
+
+"""
+Input payload for REGIONAL_ASSESSMENT job
+
+Subset of CRITERIA_ASSESSMENT payload
+"""
+struct RegionalAssessmentInput <: AbstractJobInput
+    # High level config
+    "Region for assessment"
+    region::String
+    "The type of reef, slopes or flats"
+    reef_type::String
+    # Criteria (all optional - defaulting to min/max of criteria)
+    depth_min::OptionalValue{Float64}
+    depth_max::OptionalValue{Float64}
+    slope_min::OptionalValue{Float64}
+    slope_max::OptionalValue{Float64}
+    rugosity_min::OptionalValue{Float64}
+    rugosity_max::OptionalValue{Float64}
+    waves_period_min::OptionalValue{Float64}
+    waves_period_max::OptionalValue{Float64}
+    waves_height_min::OptionalValue{Float64}
+    waves_height_max::OptionalValue{Float64}
+end
+
+"""
+Output payload for REGIONAL_ASSESSMENT job
+"""
+struct RegionalAssessmentOutput <: AbstractJobOutput
+    cog_path::String
+end
+
+"""
+Handler for REGIONAL_ASSESSMENT jobs
+"""
+struct RegionalAssessmentHandler <: AbstractJobHandler end
+
+"""
+Handler for the regional assessment job. 
+"""
+function handle_job(
+    ::RegionalAssessmentHandler, input::RegionalAssessmentInput,
+    context::HandlerContext
+)::RegionalAssessmentOutput
+    @info "Initiating regional assessment task"
+
+    @info "Setting up regional assessment data"
+    regional_data::ReefGuide.RegionalData = get_regional_data(;
+        data_path=context.data_path, cache_path=context.cache_path
+    )
+    @info "Done setting up regional assessment data"
+
+    @info "Compiling regional assessment parameters from regional data and input data"
+    params = build_regional_assessment_parameters(
+        input,
+        regional_data
+    )
+    @info "Done compiling parameters"
+
+    @info "Performing regional assessment"
+    regional_assessment_filename = build_regional_assessment_file_path(
+        params; ext="tiff", cache_path=context.cache_path
+    )
+    @debug "COG File name: $(regional_assessment_filename)"
+
+    if !isfile(regional_assessment_filename)
+        @debug "File system cache was not hit for this task"
+        @debug "Assessing region $(params.region)"
+        assessed = ReefGuide.assess_region(params)
+
+        @debug now() "Writing COG of regional assessment to $(regional_assessment_filename)"
+        # TODO would be better to not hardcode these - env variables?
+        ReefGuide._write_cog(
+            regional_assessment_filename, assessed; tile_size=(256,), num_threads=4
+        )
+        @debug now() "Finished writing cog "
+    else
+        @info "Cache hit - skipping regional assessment process and re-uploading to output!"
+    end
+
+    # Now upload this to s3 
+    client = S3StorageClient(; region=context.aws_region, s3_endpoint=context.s3_endpoint)
+
+    # Output file names
+    output_file_name_rel = "regional_assessment.tiff"
+    full_s3_target = "$(context.storage_uri)/$(output_file_name_rel)"
+    @debug "File paths:" relative = output_file_name_rel absolute = full_s3_target
+
+    @debug now() "Initiating file upload"
+    upload_file(client, regional_assessment_filename, full_s3_target)
+    @debug now() "File upload completed"
+
+    @debug "Finished regional assessment job."
+    return RegionalAssessmentOutput(
+        output_file_name_rel
+    )
+end
+
+#
+# ======================
+# SUITABILITY_ASSESSMENT 
+# ======================
+#
+
+"""
+Input payload for SUITABILITY_ASSESSMENT job
+
+NOTE this is a RegionalAssessmentInput (and more) and therefore also an
+AbstractJobInput
+"""
+struct SuitabilityAssessmentInput <: AbstractJobInput
+    # High level config
+    "Region for assessment"
+    region::String
+    "The type of reef, slopes or flats"
+    reef_type::String
+    # Criteria
+    depth_min::OptionalValue{Float64}
+    depth_max::OptionalValue{Float64}
+    slope_min::OptionalValue{Float64}
+    slope_max::OptionalValue{Float64}
+    rugosity_min::OptionalValue{Float64}
+    rugosity_max::OptionalValue{Float64}
+    waves_period_min::OptionalValue{Float64}
+    waves_period_max::OptionalValue{Float64}
+    waves_height_min::OptionalValue{Float64}
+    waves_height_max::OptionalValue{Float64}
+    threshold::OptionalValue{Int64}
+    # Unique to suitability assessment - required
+    "Length dimension of target polygon"
+    x_dist::Int64
+    "Width dimension of target polygon"
+    y_dist::Int64
+end
+
+"""
+Output payload for SUITABILITY_ASSESSMENT job
+"""
+struct SuitabilityAssessmentOutput <: AbstractJobOutput
+    geojson_path::String
+end
+
+"""
+Handler for SUITABILITY_ASSESSMENT jobs
+"""
+struct SuitabilityAssessmentHandler <: AbstractJobHandler end
+
+"""
+Handler for the suitability assessment job. 
+"""
+function handle_job(
+    ::SuitabilityAssessmentHandler, input::SuitabilityAssessmentInput,
+    context::HandlerContext)::SuitabilityAssessmentOutput
+    @info "Initiating site assessment task"
+
+    @info "Setting up regional assessment data"
+    regional_data::ReefGuide.RegionalData = get_regional_data(;
+        data_path=context.data_path, cache_path=context.cache_path
+    )
+    @info "Done setting up regional assessment data"
+
+    @info "Compiling suitability assessment parameters from regional data and job inputs"
+    params::ReefGuide.SuitabilityAssessmentParameters = build_suitability_assessment_parameters(
+        input,
+        regional_data
+    )
+    @info "Done compiling parameters"
+
+    @debug "Performing site assessment"
+    best_sites = ReefGuide.filter_sites(
+        ReefGuide.assess_sites(
+            params
+        )
+    )
+
+    @debug "Writing to temporary file"
+    geojson_name = "$(tempname()).geojson"
+    @debug "File name $(geojson_name)"
+
+    if size(best_sites, 1) == 0
+        open(geojson_name, "w") do f
+            JSON.print(f, nothing)
+        end
+    else
+        output_geojson(geojson_name, best_sites)
+    end
+
+    # Now upload this to s3 
+    client = S3StorageClient(; region=context.aws_region, s3_endpoint=context.s3_endpoint)
+
+    # Output file names
+    output_file_name_rel = "suitable.geojson"
+    full_s3_target = "$(context.storage_uri)/$(output_file_name_rel)"
+    @debug "File paths:" relative = output_file_name_rel absolute = full_s3_target
+
+    upload_file(client, geojson_name, full_s3_target)
+
+    # clean up temp file
+    if isfile(geojson_name)
+        @debug "Cleaned up temp file"
+        rm(geojson_name)
+    end
+
+    @debug "Finished suitability assessment job."
+    return SuitabilityAssessmentOutput(
+        output_file_name_rel
+    )
+end
+
+#
 # ====
 # INIT
 # ====
@@ -240,7 +458,21 @@ function __init__()
         TestOutput
     )
 
-    # initialise more methods here as above
+    # Register the SUITABILITY_ASSESSMENT job handler
+    register_job_handler!(
+        SUITABILITY_ASSESSMENT,
+        SuitabilityAssessmentHandler(),
+        SuitabilityAssessmentInput,
+        SuitabilityAssessmentOutput
+    )
+
+    # Register the REGIONAL_ASSESSMENT job handler
+    register_job_handler!(
+        REGIONAL_ASSESSMENT,
+        RegionalAssessmentHandler(),
+        RegionalAssessmentInput,
+        RegionalAssessmentOutput
+    )
 
     @debug "Jobs module initialized with handlers"
 end
