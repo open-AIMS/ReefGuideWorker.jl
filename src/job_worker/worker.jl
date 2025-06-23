@@ -133,7 +133,8 @@ function process(::TypedJobHandler, context::JobContext)
                 aws_region=context.aws_region,
                 s3_endpoint=context.s3_endpoint,
                 cache_path=context.cache_path,
-                data_path=context.data_path
+                data_path=context.data_path,
+                client=context.http_client
             )
         )
 
@@ -145,7 +146,7 @@ function process(::TypedJobHandler, context::JobContext)
         try
             result_payload = JSON3.read(JSON3.write(output), Dict)
         catch
-            @debug "Error occurred while trying to convert a task output payload into a dictionary - presumably this is due to an empty result payload struct."
+            @debug "The payload is likely empty, resulting in a failure to serialise it."
         end
 
         @debug "Parsed payload $(result_payload)"

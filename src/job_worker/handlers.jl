@@ -14,6 +14,7 @@ Enum for job types matching the API definition
     SUITABILITY_ASSESSMENT
     REGIONAL_ASSESSMENT
     TEST
+    DATA_SPECIFICATION_UPDATE
 end
 
 symbol_to_job_type = Dict(zip(Symbol.(instances(JobType)), instances(JobType)))
@@ -53,14 +54,16 @@ struct HandlerContext
     s3_endpoint::OptionalValue{String}
     cache_path::String
     data_path::String
+    client::AuthApiClient
 
     function HandlerContext(;
         storage_uri::String, aws_region::String="ap-southeast-2",
         s3_endpoint::OptionalValue{String}=nothing,
         cache_path::String,
-        data_path::String
+        data_path::String,
+        client::AuthApiClient
     )
-        return new(storage_uri, aws_region, s3_endpoint, cache_path, data_path)
+        return new(storage_uri, aws_region, s3_endpoint, cache_path, data_path, client)
     end
 end
 
@@ -441,6 +444,73 @@ function handle_job(
 end
 
 #
+# ========================
+# DATA_SPECIFICATION_UPDATE 
+# ========================
+#
+
+"""
+Input payload for DATA_SPECIFICATION_UPDATE job
+
+Simple input with optional cache buster to force updates
+"""
+struct DataSpecificationUpdateInput <: AbstractJobInput
+    "Cache buster to force update"
+    cache_buster::OptionalValue{Int64}
+end
+
+"""
+Output payload for DATA_SPECIFICATION_UPDATE job
+
+Empty output as results are lodged directly to the database
+"""
+struct DataSpecificationUpdateOutput <: AbstractJobOutput
+end
+
+"""
+Handler for DATA_SPECIFICATION_UPDATE jobs
+"""
+struct DataSpecificationUpdateHandler <: AbstractJobHandler end
+
+"""
+Handler for the data specification update job.
+
+This job fetches the current regional data and updates the API database
+with the latest criteria bounds and metadata for all regions.
+"""
+function handle_job(
+    ::DataSpecificationUpdateHandler,
+    input::DataSpecificationUpdateInput,
+    context::HandlerContext
+)::DataSpecificationUpdateOutput
+    @info "Initiating data specification update task"
+
+    @info "Setting up regional data"
+    regional_data::ReefGuide.RegionalData = get_regional_data(;
+        data_path=context.data_path, cache_path=context.cache_path
+    )
+    @info "Done setting up regional data"
+
+    @info "Processing regional criteria data for API update"
+
+    # Build the data specification payload from regional data
+    payload = build_data_specification_payload(regional_data)
+
+    @debug "Cache buster value: $(input.cache_buster)"
+    @info "Built payload for $(length(payload.regions)) regions"
+
+    # POST the payload to the API endpoint
+    @info "Posting data specification update to API"
+    # TODO add client to context
+    post_data_specification_update(payload, context.client)
+    @info "Successfully posted data specification update"
+
+    @info "Data specification update completed successfully"
+
+    return DataSpecificationUpdateOutput()
+end
+
+#
 # ====
 # INIT
 # ====
@@ -472,6 +542,14 @@ function __init__()
         RegionalAssessmentHandler(),
         RegionalAssessmentInput,
         RegionalAssessmentOutput
+    )
+
+    #Register the DATA_SPECIFICATION_UPDATE job handler
+    register_job_handler!(
+        DATA_SPECIFICATION_UPDATE,
+        DataSpecificationUpdateHandler(),
+        DataSpecificationUpdateInput,
+        DataSpecificationUpdateOutput
     )
 
     @debug "Jobs module initialized with handlers"

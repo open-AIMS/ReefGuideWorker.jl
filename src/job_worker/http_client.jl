@@ -229,6 +229,27 @@ function HTTPPost(
     end
 end
 
+
+"""
+Post using string json data
+"""
+function HTTPPost(
+    client::AuthApiClient, path::String, json_data::String
+)::Union{Any,Nothing}
+    url, headers = setupHeaders(client, path)
+
+    body = json_data
+    response = HTTP.post(url, headers, body)
+    response_content = String(response.body)
+    @debug "Response content = $(response_content)"
+
+    if isempty(response_content)
+        return nothing
+    else
+        return JSON3.read(response_content)
+    end
+end
+
 function HTTPPut(
     client::AuthApiClient, path::String, data::Union{Dict,Nothing}=nothing
 )::Any
