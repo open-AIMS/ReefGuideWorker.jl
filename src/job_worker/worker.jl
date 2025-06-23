@@ -297,8 +297,10 @@ function run_worker_loop(worker::WorkerService)
             @debug "Checking for idle timeout"
             check_idle_timeout(worker)
 
-            # Sleep before next poll
-            sleep(worker.config.poll_interval_ms / 1000)
+            # Sleep before next poll (but only if we didn't find something)
+            if isnothing(job)
+                sleep(worker.config.poll_interval_ms / 1000)
+            end
         catch e
             @error "Error in worker loop: $e" exception = (e, catch_backtrace())
             # Sleep briefly before retrying to avoid hammering the API on errors
