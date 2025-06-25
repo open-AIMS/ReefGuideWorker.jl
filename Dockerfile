@@ -79,11 +79,6 @@ COPY Project.toml Manifest*.toml ./
 RUN julia --project=@app \
     -e 'using Pkg; Pkg.add(url="https://github.com/ConnectedSystems/GeometryOps.jl", rev="main");'
 
-# Add custom fork of ReefGuide
-# TODO: remove once git is no longer needed to install ReefGuide
-RUN julia --project=@app \
-    -e 'using Pkg; Pkg.add(url="https://github.com/open-AIMS/ReefGuide.jl", rev="main");'
-
 # Install the ReefGuideWorker source code and configure it as a development
 # package in the @app shared environment.
 # Should be v speedy if the .toml file is unchanged, because all the
