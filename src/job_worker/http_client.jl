@@ -17,7 +17,7 @@ struct ApiError <: Exception
 end
 
 """
-Represents JWT payload structure 
+Represents JWT payload structure
 
 (This is what's in the token)
 """
@@ -80,7 +80,7 @@ function get_valid_token(client::AuthApiClient)::Union{String,Nothing}
 
     exp_time = decoded_token["exp"]
 
-    # Get current unix timestamp 
+    # Get current unix timestamp
     current_unix = floor(Int64, Dates.datetime2unix(Dates.now(Dates.UTC)))
 
     # convert to ms
@@ -228,7 +228,6 @@ function HTTPPost(
         return JSON3.read(response_content)
     end
 end
-
 
 """
 Post using string json data
