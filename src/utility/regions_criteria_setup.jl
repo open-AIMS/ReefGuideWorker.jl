@@ -93,7 +93,7 @@ function initialise_data_with_cache(;
         end
 
         # Try disk cache second (faster than full reload)
-        disk_data = check_existing_regional_data_from_disk(cache_path=cache_path)
+        disk_data = check_existing_regional_data_from_disk(; cache_path=cache_path)
         if !isnothing(disk_data)
             REGIONAL_DATA = disk_data
             return nothing
@@ -114,7 +114,7 @@ function initialise_data_with_cache(;
     try
         # Ensure cache directory exists
         mkpath(cache_path)
-        
+
         serialize(
             joinpath(cache_path, REGIONAL_DATA_CACHE_FILENAME),
             regional_data
@@ -144,7 +144,7 @@ function get_regional_data(; data_path::String, cache_path::String)::ReefGuide.R
     @debug "Getting regional data with automatic cache management" data_path cache_path
 
     # Ensure data is loaded (with caching)
-    initialise_data_with_cache(data_path=data_path, cache_path=cache_path)
+    initialise_data_with_cache(; data_path=data_path, cache_path=cache_path)
 
     # Return cached data
     return REGIONAL_DATA
