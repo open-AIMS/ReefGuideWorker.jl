@@ -2,7 +2,7 @@
 
 julia_version = "1.11.5"
 manifest_format = "2.0"
-project_hash = "f28582dabfffb72b7502724bd57602c8444012ab"
+project_hash = "946898f13b3fef6abbcff3f1693804f72b5148d2"
 
 [[deps.AWS]]
 deps = ["Base64", "Compat", "Dates", "Downloads", "GitHub", "HTTP", "IniFile", "JSON", "MbedTLS", "Mocking", "OrderedCollections", "Random", "SHA", "Sockets", "URIs", "UUIDs", "XMLDict"]
@@ -805,11 +805,9 @@ version = "0.5.9"
 
 [[deps.GeometryOps]]
 deps = ["AbstractTrees", "AdaptivePredicates", "CoordinateTransformations", "DataAPI", "DelaunayTriangulation", "ExactPredicates", "Extents", "GeoFormatTypes", "GeoInterface", "GeometryOpsCore", "LinearAlgebra", "SortTileRecursiveTree", "StaticArrays", "Statistics", "Tables"]
-git-tree-sha1 = "10ed59ba219a58f3ab17bca99a16a38af649a3a8"
-repo-rev = "main"
-repo-url = "https://github.com/ConnectedSystems/GeometryOps.jl"
+git-tree-sha1 = "1b7fef8228b2fb471548d6a1e1b644056b536970"
 uuid = "3251bfac-6a57-4b6d-aa61-ac1fef2975ab"
-version = "0.1.25"
+version = "0.1.26"
 
     [deps.GeometryOps.extensions]
     GeometryOpsDataFramesExt = "DataFrames"
