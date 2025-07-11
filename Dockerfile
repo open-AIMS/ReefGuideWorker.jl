@@ -82,8 +82,6 @@ ENV APP_ENV_DIR="${JULIA_DEPOT_PATH}/environments/app" \
 # /data/.config.toml
 VOLUME ["/data/app"]
 
-EXPOSE 8000
-
 # Create an entrypoint script to handle the sysimage path at runtime
 RUN echo '#!/bin/bash\nexec julia --project=@app -t auto,1 "$@"' > /usr/local/bin/julia-entrypoint.sh && \
     chmod +x /usr/local/bin/julia-entrypoint.sh
