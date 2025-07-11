@@ -11,7 +11,6 @@ FROM julia:${JULIA_VERSION}-bookworm AS internal-base
 ARG BASE_IMAGE="julia:${JULIA_VERSION}-bookworm"
 LABEL org.opencontainers.image.base.name=${BASE_IMAGE}
 
-
 # Update all pre-installed OS packages (to get security updates)
 # and add a few extra utilities
 RUN --mount=target=/var/lib/apt/lists,type=cache,sharing=locked \
@@ -25,10 +24,12 @@ RUN --mount=target=/var/lib/apt/lists,type=cache,sharing=locked \
     gdal-bin \
     libgdal-dev \
     libfftw3-dev \
+    openssl \
+    libssl-dev \
+    ca-certificates \
     && apt-get clean \
     && apt-get autoremove --purge \
     && rm -rf /var/lib/apt/lists/*
-
 
 # Tweak the JULIA_DEPOT_PATH setting so that our shared environments will end up
 # in a user-agnostic location, not in ~/.julia => /root/.julia which is the default.
@@ -36,6 +37,7 @@ RUN --mount=target=/var/lib/apt/lists,type=cache,sharing=locked \
 # This allows apps derived from this image to drop privileges and run as non-root
 # user accounts, but still activate environments configured by this dockerfile.
 ENV JULIA_DEPOT_PATH="/usr/local/share/julia"
+ENV PRJ_PATH="/usr/local/share/julia/environments/app"
 ENV JULIA_PKG_USE_CLI_GIT=true
 
 # Prepare an empty @app Julia environment for derived images to use - this is created in the shared depot path
@@ -48,10 +50,24 @@ RUN mkdir -p "${JULIA_DEPOT_PATH}" && \
 # (See https://docs.julialang.org/en/v1/manual/environment-variables/#JULIA_LOAD_PATH)
 ENV JULIA_LOAD_PATH="@:@app:@v#.#:@stdlib"
 
+# Copy project and manifest - includes Manifest-v1.11 etc
+COPY Project.toml Manifest*.toml ./
+
+# Install ReefGuideWorker from source and configure it as a development
+# package in the @app shared environment.
+# Should be v speedy if the .toml file is unchanged, because all the
+# dependencies *should* already be installed.
+COPY ./src src
+RUN julia --project=@app \
+    -e 'using Pkg; \
+    Pkg.develop(PackageSpec(path=pwd())); \
+    Pkg.add("MKL"); \
+    Pkg.precompile(); \
+    using ReefGuideWorker;'
+
 # Run Julia commands by default as the container launches.
 # Derived applications should override the command.
 ENTRYPOINT ["julia", "--project=@app"]
-
 
 #------------------------------------------------------------------------------
 # app-src build target: installs directly from source files in this repo.
@@ -62,34 +78,18 @@ ENV APP_ENV_DIR="${JULIA_DEPOT_PATH}/environments/app" \
     APP_SRC_DIR="/usr/local/src/app" \
     JULIA_PKG_USE_CLI_GIT=true
 
-# Try to coerce Julia to build across multiple targets
-ENV JULIA_CPU_TARGET=x86_64;haswell;skylake;skylake-avx512;tigerlake
-
-# Install the versioned .toml file(s) into the shared app environment and use
-# those to set up the ReefGuideWorker source code as a development package in the
-# shared @app environment, pre-installing and precompiling dependencies.
-WORKDIR "${APP_SRC_DIR}"
-
-# Copy project and manifest - includes Manifest-v1.11 etc
-COPY Project.toml Manifest*.toml ./
-
-# Install the ReefGuideWorker source code and configure it as a development
-# package in the @app shared environment.
-# Should be v speedy if the .toml file is unchanged, because all the
-# dependencies *should* already be installed.
-COPY ./src src
-
-RUN julia --project=@app \
-    -e  'using Pkg; Pkg.develop(PackageSpec(path=pwd())); Pkg.precompile(); using ReefGuideWorker;'
-
 # Expect to include the prepped data at /data/app and the config at
 # /data/.config.toml
 VOLUME ["/data/app"]
 
 EXPOSE 8000
 
-# By default, drops the user into a  julia shell with ReefGuideWorker activated
-ENTRYPOINT ["julia", "--project=@app", "-t", "auto,1", "-e"]
+# Create an entrypoint script to handle the sysimage path at runtime
+RUN echo '#!/bin/bash\nexec julia --project=@app -t auto,1 "$@"' > /usr/local/bin/julia-entrypoint.sh && \
+    chmod +x /usr/local/bin/julia-entrypoint.sh
+
+# By default, drops the user into a julia shell with ReefGuideWorker activated
+ENTRYPOINT ["/usr/local/bin/julia-entrypoint.sh"]
 
 # Derived applications should override the command e.g. to start worker use
-CMD ["using ReefGuideWorker; ReefGuideWorker.start_worker()"]
+CMD ["-e", "using ReefGuideWorker; ReefGuideWorker.start_worker()"]
