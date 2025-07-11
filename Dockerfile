@@ -91,12 +91,8 @@ ENV APP_ENV_DIR="${JULIA_DEPOT_PATH}/environments/app" \
 # /data/.config.toml
 VOLUME ["/data/app"]
 
-# Create an entrypoint script
-RUN echo '#!/bin/bash\nexec julia --project=@app -t auto,1 "$@"' > /usr/local/bin/julia-entrypoint.sh && \
-    chmod +x /usr/local/bin/julia-entrypoint.sh
+# By default, drops the user into a  julia shell with ReefGuideWorker activated
+ENTRYPOINT ["julia", "--project=@app", "-t", "auto,1", "-e"]
 
-# By default, drops the user into a julia shell with ReefGuideWorker activated
-ENTRYPOINT ["/usr/local/bin/julia-entrypoint.sh"]
-
-# Derived applications should override the command e.g. to start worker use
-CMD ["-e", "using ReefGuideWorker; ReefGuideWorker.start_worker()"]
+# Derived applications should override the command e.g. to start
+CMD ["using ReefGuideWorker; ReefGuideWorker.start_worker()"]
