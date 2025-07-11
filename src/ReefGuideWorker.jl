@@ -1,6 +1,10 @@
 module ReefGuideWorker
 
-# System imports 
+# Precompilation
+using PrecompileSignatures: @precompile_signatures
+# using PrecompileTools
+
+# System imports
 using Base.Threads
 
 # Critical import for reefguide assessment methods
@@ -43,5 +47,8 @@ function start_worker()
 end
 
 export start_worker
+
+# Auto-generate precompilation signatures for ReefGuideWorker
+@precompile_signatures(ReefGuideWorker)
 
 end
