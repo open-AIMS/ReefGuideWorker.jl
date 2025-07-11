@@ -40,6 +40,15 @@ ENV JULIA_DEPOT_PATH="/usr/local/share/julia"
 ENV PRJ_PATH="/usr/local/share/julia/environments/app"
 ENV JULIA_PKG_USE_CLI_GIT=true
 
+# Coerce Julia to build across multiple targets
+# Generic targets taken from: cpu_targets taken from:
+# https://docs.julialang.org/en/v1/devdocs/sysimg/#Specifying-multiple-system-image-targets
+ENV JULIA_CPU_TARGET=generic;sandybridge,-xsaveopt,clone_all;haswell,-rdrnd,base(1)
+
+# Alternate set that was found to initially alleviate issues on AWS at expense of very
+# long build times.
+# ENV JULIA_CPU_TARGET=x86_64;haswell;skylake;skylake-avx512;tigerlake
+
 # Prepare an empty @app Julia environment for derived images to use - this is created in the shared depot path
 RUN mkdir -p "${JULIA_DEPOT_PATH}" && \
     chmod 0755 "${JULIA_DEPOT_PATH}" && \
@@ -60,8 +69,8 @@ COPY Project.toml Manifest*.toml ./
 COPY ./src src
 RUN julia --project=@app \
     -e 'using Pkg; \
-    Pkg.develop(PackageSpec(path=pwd())); \
     Pkg.add("MKL"); \
+    Pkg.develop(PackageSpec(path=pwd())); \
     Pkg.precompile(); \
     using ReefGuideWorker;'
 
