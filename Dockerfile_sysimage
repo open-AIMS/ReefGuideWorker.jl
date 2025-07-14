@@ -1,4 +1,5 @@
 # Worker container with sysimage
+# docker build -t reefguide-img-worker -f Dockerfile_sysimage .
 
 # Following advice found in this Discourse thread:
 # https://discourse.julialang.org/t/creating-a-docker-base-image-for-faster-deployments/121165/2
