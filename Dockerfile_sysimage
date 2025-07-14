@@ -1,0 +1,74 @@
+# Worker container with sysimage
+
+# Following advice found in this Discourse thread:
+# https://discourse.julialang.org/t/creating-a-docker-base-image-for-faster-deployments/121165/2
+
+ARG JULIA_VERSION="1.11.5"
+FROM julia:${JULIA_VERSION}-bookworm AS internal-base
+
+# Since 1.9.0 Julia, the CPU target is set to "native" by default.
+# This settings avoids the need to compile the Julia packages for the specific CPU architecture of the host machine
+# Make sure the image can be used on any x86_64 machine by setting JULIA_CPU_TARGET
+# to the same value used by the generic julia binaries, see
+# https://github.com/JuliaCI/julia-buildkite/blob/4b6932992f7985af71fc3f73af77abf4d25bd146/utilities/build_envs.sh#L23-L31
+ENV JULIA_CPU_TARGET="generic;sandybridge,-xsaveopt,clone_all;haswell,-rdrnd,base(1);x86-64-v4,-rdrnd,base(1);znver4,-rdrnd,base(1)"
+
+ENV JULIA_VERSION=1.11.5
+ENV JULIA_DIR=/usr/local/julia
+ENV JULIA_PATH=${JULIA_DIR}
+ENV JULIA_DEPOT_PATH=usr/local/share/julia
+ENV APP_ENV_PATH=${JULIA_DEPOT_PATH}/environments/app
+ENV APP_SRC_DIR=/usr/local/src/app
+
+# Update all pre-installed OS packages (to get security updates)
+# and add a few extra utilities
+RUN --mount=target=/var/lib/apt/lists,type=cache,sharing=locked \
+    --mount=target=/var/cache/apt,type=cache,sharing=locked \
+    apt-get update \
+    && apt-get -y upgrade \
+    && apt-get install --no-install-recommends -y \
+    git \
+    openssl \
+    libssl-dev \
+    g++ \
+    curl \
+    ca-certificates \
+    && apt-get clean \
+    && apt-get autoremove --purge \
+    && rm -rf /var/lib/apt/lists/*
+
+# Setup shared environment and add packages
+RUN mkdir -p "${JULIA_DEPOT_PATH}" \
+    && chmod 0755 "${JULIA_DEPOT_PATH}"
+
+WORKDIR "${APP_SRC_DIR}"
+
+COPY Project.toml Manifest*.toml ./
+COPY src/ src/
+
+# Expect to include the prepped data at /data/app and the config at
+# /data/.config.toml
+VOLUME ["/data", "/data/app"]
+
+# # By default, drops the user into a julia shell with ReefGuideWorker activated
+ENV JULIA_DIR=/usr/local/julia
+ENV JULIA_PATH=${JULIA_DIR}
+ENV JULIA_DEPOT_PATH=usr/local/share/julia
+
+# If dependencies draw in specific Artifacts (additional and lazily downloaded
+# dependencies), then the environment using sysimages must also contain those Artifacts.
+# So we recreate the conditions here.
+# https://github.com/JuliaLang/PackageCompiler.jl/issues/743
+RUN julia --project=@app -e \
+    'using Pkg; \
+    Pkg.develop(PackageSpec(path=pwd())); \
+    Pkg.instantiate(); \
+    Pkg.precompile();'
+
+ENTRYPOINT [ \
+    "julia", "--project=@app", \
+    "-J", "/data/reefguide_img.so", \
+    "--sysimage-native-code=yes", \
+    "-e"]
+
+CMD ["using ReefGuideWorker; ReefGuideWorker.start_worker()"]
