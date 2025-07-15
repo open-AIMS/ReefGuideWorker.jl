@@ -34,7 +34,7 @@ ENV JULIA_CPU_TARGET="generic;sandybridge,-xsaveopt,clone_all;haswell,-rdrnd,bas
 ENV JULIA_VERSION=1.11.5
 ENV JULIA_DIR=/usr/local/julia
 ENV JULIA_PATH=${JULIA_DIR}
-ENV JULIA_DEPOT_PATH=usr/local/share/julia
+ENV JULIA_DEPOT_PATH=/usr/local/share/julia
 ENV APP_ENV_PATH=${JULIA_DEPOT_PATH}/environments/app
 ENV APP_SRC_DIR=/usr/local/src/app
 ENV JULIA_PKG_USE_CLI_GIT=true
@@ -52,6 +52,9 @@ RUN --mount=target=/var/lib/apt/lists,type=cache,sharing=locked \
     g++ \
     curl \
     ca-certificates \
+    gdal-bin \
+    libgdal-dev \
+    libfftw3-dev \
     && apt-get clean \
     && apt-get autoremove --purge \
     && rm -rf /var/lib/apt/lists/*
