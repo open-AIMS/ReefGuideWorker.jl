@@ -25,9 +25,7 @@ LABEL org.opencontainers.image.base.name=${BASE_IMAGE}
 
 # Update all pre-installed OS packages (to get security updates) and add a few
 # extra utilities
-RUN --mount=target=/var/lib/apt/lists,type=cache,sharing=locked \
-    --mount=target=/var/cache/apt,type=cache,sharing=locked \
-    apt-get update \
+RUN apt-get update \
     && apt-get -y upgrade \
     && apt-get install --no-install-recommends -y \
     git \
