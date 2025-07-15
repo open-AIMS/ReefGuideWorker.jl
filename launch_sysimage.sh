@@ -36,6 +36,7 @@ echo "Worker container name: $CONTAINER_NAME"
 # Run the container
 docker run \
     -v "$SYSIMAGE_DIR:/data" \
+    --env-file=.env \
     --entrypoint julia \
     ${CONTAINER_NAME} \
     --project=@app \
