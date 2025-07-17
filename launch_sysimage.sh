@@ -35,12 +35,13 @@ echo "Worker container name: $CONTAINER_NAME"
 
 # Run the container
 docker run \
-    -v "$SYSIMAGE_DIR:/data" \
+    -v "$SYSIMAGE_DIR:/sysimage" \
+    -v "./data:/data" \
     --env-file=.env \
     --entrypoint julia \
     ${CONTAINER_NAME} \
     --project=@app \
-    -J "/data/$SYSIMAGE_NAME" \
+    -J "/sysimage/$SYSIMAGE_NAME" \
     --sysimage-native-code=yes \
     -e "using ReefGuideWorker; ReefGuideWorker.start_worker()"
 
