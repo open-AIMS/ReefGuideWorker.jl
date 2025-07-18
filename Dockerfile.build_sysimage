@@ -67,7 +67,7 @@ COPY Project.toml Manifest*.toml ./
 COPY src/ src/
 
 # Build sysimage
-RUN julia --project=@app -e \
+RUN julia -t auto --project=@app -e \
     'using Pkg; \
     Pkg.add("PackageCompiler"); \
     Pkg.develop(PackageSpec(path=pwd())); \
@@ -75,8 +75,7 @@ RUN julia --project=@app -e \
 
 # Reduce number of tasks/threads to avoid heavy memory use during sysimage compilation
 # https://github.com/JuliaLang/PackageCompiler.jl/issues/1031#issuecomment-2823054267
-ENV JULIA_NUM_PRECOMPILE_TASKS=1
-RUN julia --project=@app -t 1,1 -e 'include("src/sysimage.jl")'
+RUN julia --project=@app -t auto -e 'include("src/sysimage.jl")'
 
 # Export Julia sysimage to host filesystem
 # From project root

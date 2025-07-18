@@ -90,13 +90,13 @@ This worker template integrates with the ReefGuide ecosystem, connecting to the 
 To build, using docker, a current sysimage
 
 ```
-docker build --target export-sysimage -t sysimage .
+docker build --target export-sysimage -f Dockerfile.build_sysimage -t sysimage .
 ```
 
 Then copy the file out:
 
 ```
-docker create --name temp-sysimage sysimage
+docker create --name temp-sysimage sysimage bash
 docker cp temp-sysimage:/reefguide_img.so ./reefguide_img.so
 docker rm temp-sysimage
 ```
