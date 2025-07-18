@@ -37,6 +37,7 @@ echo "Worker container name: $CONTAINER_NAME"
 docker run \
     -v "$SYSIMAGE_DIR:/sysimage" \
     -v "./data:/data" \
+    --network host \
     --env-file=.env \
     --entrypoint julia \
     ${CONTAINER_NAME} \
