@@ -42,6 +42,7 @@ docker run \
     --entrypoint julia \
     ${CONTAINER_NAME} \
     --project=@app \
+    -t auto \
     -J "/sysimage/$SYSIMAGE_NAME" \
     --sysimage-native-code=yes \
     -e "using ReefGuideWorker; ReefGuideWorker.start_worker()"
