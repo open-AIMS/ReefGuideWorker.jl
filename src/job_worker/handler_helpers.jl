@@ -4,7 +4,6 @@ Helpers for job handlers which interrupt main workflow.
 For example, converting between job system interfaces and assessment interfaces.
 """
 
-
 """
 Build regional assessment parameters from user input and regional data.
 
@@ -291,7 +290,8 @@ function merge_bounds(
         max=!isnothing(user_max) ? user_max : criteria.bounds.max
     )
 
-    @debug "Merged bounds for $(criteria.metadata.id)" min_val = bounds.min max_val = bounds.max user_specified_min =
+    @debug "Merged bounds for $(criteria.metadata.id)" min_val = bounds.min max_val =
+        bounds.max user_specified_min =
         !isnothing(user_min) user_specified_max = !isnothing(user_max)
 
     return bounds
