@@ -19,7 +19,6 @@ Minio = "4281f0d9-7ae0-406e-9172-b7277c1efa20"
 PrecompileSignatures = "91cefc8d-f054-46dc-8f8c-26e11d7c5411"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 ReefGuide = "cee0a5fb-9790-4c4c-b8b7-e40ecbebeb72"
-Revise = "295af30f-e4ad-537b-8983-00126c2a3abe"
 Serialization = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
 
 [compat]
@@ -34,5 +33,4 @@ Minio = "0.2.2"
 PrecompileSignatures = "3.0.3"
 Random = "1.11.0"
 ReefGuide = "0.1.2"
-Revise = "3.8.0"
 Serialization = "1.11.0"

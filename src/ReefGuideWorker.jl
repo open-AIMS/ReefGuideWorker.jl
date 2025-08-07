@@ -38,7 +38,7 @@ function start_worker()
     )
 
     # NOTE: you can perform additional setup here if needed. For example, you
-    # might want to initialise data, caches or clients.
+    # might want to initialize data, caches or clients.
 
     # Worker launch
     @info "Starting worker loop from ReefGuideWorker.jl with $(Threads.nthreads()) threads."
