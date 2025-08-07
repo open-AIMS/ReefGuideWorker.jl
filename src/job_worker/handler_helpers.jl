@@ -1,24 +1,17 @@
 """
-Helpers for job handlers which interrupt main workflow. 
+Helpers for job handlers which interrupt main workflow.
 
 For example, converting between job system interfaces and assessment interfaces.
 """
 
-# Parameter mapping: criteria_id => (min_field, max_field) or nothing
-const PARAM_MAP::Dict{String,OptionalValue{Tuple{Symbol,Symbol}}} = Dict(
-    "Depth" => (:depth_min, :depth_max),
-    "Slope" => (:slope_min, :slope_max),
-    "Turbidity" => nothing,  # Not user-configurable
-    "WavesHs" => (:waves_height_min, :waves_height_max),
-    "WavesTp" => (:waves_period_min, :waves_period_max),
-    "Rugosity" => (:rugosity_min, :rugosity_max)
-)
 
 """
 Build regional assessment parameters from user input and regional data.
 
-Creates a complete parameter set for regional assessment by merging user-specified
-criteria bounds with regional defaults. Validates that the specified region exists.
+Creates a parameter set for regional assessment by merging user-specified
+criteria bounds with regional defaults. Validates that the specified region
+ and specified criteria exists. At least one parameter for a criteria must
+ be specified (min|max) for it to be considered.
 
 # Arguments
 - `input::RegionalAssessmentInput` : User input containing assessment parameters
@@ -29,6 +22,7 @@ criteria bounds with regional defaults. Validates that the specified region exis
 
 # Throws
 - `ErrorException` : If specified region is not found in regional data
+- `ErrorException` : If criteria data is missing or bounds calculation fails.
 """
 function build_regional_assessment_parameters(
     input::RegionalAssessmentInput,
@@ -51,26 +45,34 @@ function build_regional_assessment_parameters(
     regional_criteria::ReefGuide.BoundedCriteriaDict = Dict()
     regional_bounds::ReefGuide.BoundedCriteriaDict = region_data.criteria
 
-    for (criteria_id, possible_symbols) in PARAM_MAP
+    for criteria in ReefGuide.ASSESSMENT_CRITERIA_LIST
+        criteria_id = criteria.id
+        user_min = getproperty(input, Symbol("$(criteria.payload_prefix)min"))
+        user_max = getproperty(input, Symbol("$(criteria.payload_prefix)max"))
+
+        # only include a criteria if its min | max is specified.
+        if (isnothing(user_min) && isnothing(user_max))
+            continue
+        end
+
         bounds = get(regional_bounds, criteria_id, nothing)
-        user_min =
-            isnothing(possible_symbols) ? nothing :
-            getproperty(input, first(possible_symbols))
-        user_max =
-            isnothing(possible_symbols) ? nothing :
-            getproperty(input, last(possible_symbols))
+        if isnothing(bounds)
+            throw(ErrorException("$(criteria_id) criteria missing in region_data.criteria"))
+        end
 
         merged = merge_bounds(
             user_min,
             user_max,
             bounds
         )
-        if !isnothing(merged)
-            regional_criteria[criteria_id] = ReefGuide.BoundedCriteria(;
-                metadata=ReefGuide.ASSESSMENT_CRITERIA[criteria_id],
-                bounds=merged
-            )
+        if isnothing(merged)
+            throw(ErrorException("merge_bounds failed for $(criteria_id) criteria"))
         end
+
+        regional_criteria[criteria_id] = ReefGuide.BoundedCriteria(;
+            metadata=criteria,
+            bounds=merged
+        )
     end
 
     return ReefGuide.RegionalAssessmentParameters(;
@@ -136,14 +138,20 @@ function regional_job_from_suitability_job(
         suitability_job.reef_type,
         suitability_job.depth_min,
         suitability_job.depth_max,
-        suitability_job.slope_min,
-        suitability_job.slope_max,
+        suitability_job.high_tide_min,
+        suitability_job.high_tide_max,
+        suitability_job.low_tide_min,
+        suitability_job.low_tide_max,
         suitability_job.rugosity_min,
         suitability_job.rugosity_max,
-        suitability_job.waves_period_min,
-        suitability_job.waves_period_max,
+        suitability_job.slope_min,
+        suitability_job.slope_max,
+        suitability_job.turbidity_min,
+        suitability_job.turbidity_max,
         suitability_job.waves_height_min,
-        suitability_job.waves_height_max
+        suitability_job.waves_height_max,
+        suitability_job.waves_period_min,
+        suitability_job.waves_period_max
     )
 end
 
@@ -258,12 +266,12 @@ end
 """
 Merge user-specified bounds with regional defaults.
 
-Creates bounds using user values where provided, falling back to regional 
+Creates bounds using user values where provided, falling back to regional
 bounds for unspecified values. Returns nothing if regional criteria is not available.
 
 # Arguments
 - `user_min::OptionalValue{Float64}` : User-specified minimum value (optional)
-- `user_max::OptionalValue{Float64}` : User-specified maximum value (optional)  
+- `user_max::OptionalValue{Float64}` : User-specified maximum value (optional)
 - `regional_criteria::OptionalValue{RegionalCriteriaEntry}` : Regional criteria with default bounds (optional)
 
 # Returns
@@ -283,13 +291,13 @@ function merge_bounds(
         max=!isnothing(user_max) ? user_max : criteria.bounds.max
     )
 
-    @debug "Merged bounds" min_val = bounds.min max_val = bounds.max user_specified_min =
+    @debug "Merged bounds for $(criteria.metadata.id)" min_val = bounds.min max_val = bounds.max user_specified_min =
         !isnothing(user_min) user_specified_max = !isnothing(user_max)
 
     return bounds
 end
 
-""" 
+"""
 =================================
 DATA_SPECIFICATION_UPDATE helpers
 =================================
