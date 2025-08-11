@@ -23,4 +23,6 @@ sandbox/
 
 data
 .env
+.env.*
+!.env.dist
 sysimages
