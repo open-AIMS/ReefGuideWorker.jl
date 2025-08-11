@@ -60,7 +60,6 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          target: app-src # Specifies which stage of the Dockerfile to build
           push: true # Pushes the image to the registry
           tags: ${{ steps.meta.outputs.tags }} # Uses the tags generated in the metadata step
           labels: ${{ steps.meta.outputs.labels }} # Uses the labels generated in the metadata step
