@@ -246,8 +246,7 @@ struct RegionalAssessmentInput <: AbstractJobInput
     region::String
     "The type of reef, slopes or flats"
     reef_type::String
-    # Criteria (all optional - defaulting to min/max of criteria)
-    # criteria in alphabetical order
+    # Criteria (all optional - defaulting to min/max of criteria, listed alphabetically)
     depth_min::OptionalValue{Float64}
     depth_max::OptionalValue{Float64}
     high_tide_min::OptionalValue{Float64}
@@ -434,7 +433,7 @@ function handle_job(
         output_geojson(geojson_name, best_sites)
     end
 
-    # Now upload this to s3
+    # Now upload this to S3
     client = S3StorageClient(; region=context.aws_region, s3_endpoint=context.s3_endpoint)
 
     # Output file names
