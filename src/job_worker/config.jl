@@ -26,6 +26,8 @@ struct WorkerConfig
     cache_path::String
     "What is the path to the data files?"
     data_path::String
+    "Sentry DSN URL (if monitoring enabled)"
+    sentry_dsn::OptionalValue{String}
 
     # Kwarg constructor
     function WorkerConfig(;
@@ -40,7 +42,8 @@ struct WorkerConfig
         idle_timeout_ms::Int64=5 * 60 * 1000,
         s3_endpoint::OptionalValue{String}=nothing,
         cache_path::String,
-        data_path::String
+        data_path::String,
+        sentry_dsn::OptionalValue{String}
     )
         return new(
             api_endpoint,
@@ -52,7 +55,8 @@ struct WorkerConfig
             aws_region,
             s3_endpoint,
             cache_path,
-            data_path
+            data_path,
+            sentry_dsn
         )
     end
 end
@@ -101,7 +105,7 @@ end
 """
 Gets an environment variable with validation
 """
-function get_env(key::String, required::Bool=true)
+function get_env(key::String, required::Bool=true)::OptionalValue{String}
     value = Base.get(ENV, key, nothing)
     if isnothing(value) && required
         throw(ConfigValidationError(key, "Required environment variable not set"))
@@ -169,6 +173,9 @@ function load_config_from_env()::WorkerConfig
         Int64, something(get_env("IDLE_TIMEOUT_MS", false), string(5 * 60 * 1000))
     )
 
+    # Get Sentry DSN
+    sentry_dsn = get_env("SENTRY_DSN", false)
+
     # Create and return the config object using keyword arguments
     return WorkerConfig(;
         api_endpoint,
@@ -180,7 +187,8 @@ function load_config_from_env()::WorkerConfig
         aws_region,
         s3_endpoint,
         cache_path,
-        data_path
+        data_path,
+        sentry_dsn
     )
 end
 

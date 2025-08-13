@@ -198,6 +198,11 @@ mutable struct WorkerService
             register_typed_handlers!(worker)
         end
 
+        # Initialise sentry if enabled
+        if !isnothing(config.sentry_dsn)
+            Sent
+        end
+
         return worker
     end
 end
@@ -303,6 +308,7 @@ function run_worker_loop(worker::WorkerService)
             end
         catch e
             @error "Error in worker loop: $e" exception = (e, catch_backtrace())
+
             # Sleep briefly before retrying to avoid hammering the API on errors
             sleep(1.0)
         end
