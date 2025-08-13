@@ -231,7 +231,7 @@ end
 
 #
 # ===================
-# REGIONAL_ASSESSMENT 
+# REGIONAL_ASSESSMENT
 # ===================
 #
 
@@ -246,17 +246,23 @@ struct RegionalAssessmentInput <: AbstractJobInput
     region::String
     "The type of reef, slopes or flats"
     reef_type::String
-    # Criteria (all optional - defaulting to min/max of criteria)
+    # Criteria (all optional - defaulting to min/max of criteria, listed alphabetically)
     depth_min::OptionalValue{Float64}
     depth_max::OptionalValue{Float64}
-    slope_min::OptionalValue{Float64}
-    slope_max::OptionalValue{Float64}
+    high_tide_min::OptionalValue{Float64}
+    high_tide_max::OptionalValue{Float64}
+    low_tide_min::OptionalValue{Float64}
+    low_tide_max::OptionalValue{Float64}
     rugosity_min::OptionalValue{Float64}
     rugosity_max::OptionalValue{Float64}
-    waves_period_min::OptionalValue{Float64}
-    waves_period_max::OptionalValue{Float64}
+    slope_min::OptionalValue{Float64}
+    slope_max::OptionalValue{Float64}
+    turbidity_min::OptionalValue{Float64}
+    turbidity_max::OptionalValue{Float64}
     waves_height_min::OptionalValue{Float64}
     waves_height_max::OptionalValue{Float64}
+    waves_period_min::OptionalValue{Float64}
+    waves_period_max::OptionalValue{Float64}
 end
 
 """
@@ -272,7 +278,7 @@ Handler for REGIONAL_ASSESSMENT jobs
 struct RegionalAssessmentHandler <: AbstractJobHandler end
 
 """
-Handler for the regional assessment job. 
+Handler for the regional assessment job.
 """
 function handle_job(
     ::RegionalAssessmentHandler, input::RegionalAssessmentInput,
@@ -314,7 +320,7 @@ function handle_job(
         @info "Cache hit - skipping regional assessment process and re-uploading to output!"
     end
 
-    # Now upload this to s3 
+    # Now upload this to s3
     client = S3StorageClient(; region=context.aws_region, s3_endpoint=context.s3_endpoint)
 
     # Output file names
@@ -334,7 +340,7 @@ end
 
 #
 # ======================
-# SUITABILITY_ASSESSMENT 
+# SUITABILITY_ASSESSMENT
 # ======================
 #
 
@@ -350,19 +356,25 @@ struct SuitabilityAssessmentInput <: AbstractJobInput
     region::String
     "The type of reef, slopes or flats"
     reef_type::String
-    # Criteria
+    # Criteria (alphabetical order)
     depth_min::OptionalValue{Float64}
     depth_max::OptionalValue{Float64}
-    slope_min::OptionalValue{Float64}
-    slope_max::OptionalValue{Float64}
+    high_tide_min::OptionalValue{Float64}
+    high_tide_max::OptionalValue{Float64}
+    low_tide_min::OptionalValue{Float64}
+    low_tide_max::OptionalValue{Float64}
     rugosity_min::OptionalValue{Float64}
     rugosity_max::OptionalValue{Float64}
-    waves_period_min::OptionalValue{Float64}
-    waves_period_max::OptionalValue{Float64}
+    slope_min::OptionalValue{Float64}
+    slope_max::OptionalValue{Float64}
+    turbidity_min::OptionalValue{Float64}
+    turbidity_max::OptionalValue{Float64}
     waves_height_min::OptionalValue{Float64}
     waves_height_max::OptionalValue{Float64}
+    waves_period_min::OptionalValue{Float64}
+    waves_period_max::OptionalValue{Float64}
+    # Unique to suitability assessment
     threshold::OptionalValue{Int64}
-    # Unique to suitability assessment - required
     "Length dimension of target polygon"
     x_dist::Int64
     "Width dimension of target polygon"
@@ -382,7 +394,7 @@ Handler for SUITABILITY_ASSESSMENT jobs
 struct SuitabilityAssessmentHandler <: AbstractJobHandler end
 
 """
-Handler for the suitability assessment job. 
+Handler for the suitability assessment job.
 """
 function handle_job(
     ::SuitabilityAssessmentHandler, input::SuitabilityAssessmentInput,
@@ -421,7 +433,7 @@ function handle_job(
         output_geojson(geojson_name, best_sites)
     end
 
-    # Now upload this to s3 
+    # Now upload this to S3
     client = S3StorageClient(; region=context.aws_region, s3_endpoint=context.s3_endpoint)
 
     # Output file names
@@ -445,7 +457,7 @@ end
 
 #
 # ========================
-# DATA_SPECIFICATION_UPDATE 
+# DATA_SPECIFICATION_UPDATE
 # ========================
 #
 

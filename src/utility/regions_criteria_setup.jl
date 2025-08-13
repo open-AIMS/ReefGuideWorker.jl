@@ -76,7 +76,7 @@ to full data initialization. Handles cache invalidation and saves new data to di
 - `cache_path::String` : Directory where cache files are stored
 - `force_cache_invalidation::Bool` : If true, bypass all caches and reload data
 """
-function initialise_data_with_cache(;
+function initialize_data_with_cache(;
     data_path::String, cache_path::String, force_cache_invalidation::Bool=false
 )
     @info "Initializing regional data with caching" force_cache_invalidation data_path cache_path
@@ -104,7 +104,7 @@ function initialise_data_with_cache(;
 
     # No cache available or forced invalidation - load from source
     @info "Loading regional data from source files (no cache available)"
-    regional_data = ReefGuide.initialise_data(data_path)
+    regional_data = ReefGuide.initialize_data(data_path)
 
     # Update global cache
     REGIONAL_DATA = regional_data
@@ -144,7 +144,7 @@ function get_regional_data(; data_path::String, cache_path::String)::ReefGuide.R
     @debug "Getting regional data with automatic cache management" data_path cache_path
 
     # Ensure data is loaded (with caching)
-    initialise_data_with_cache(; data_path=data_path, cache_path=cache_path)
+    initialize_data_with_cache(; data_path=data_path, cache_path=cache_path)
 
     # Return cached data
     return REGIONAL_DATA
