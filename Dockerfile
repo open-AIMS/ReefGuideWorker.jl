@@ -1,5 +1,5 @@
 # See https://hub.docker.com/_/julia for valid versions.
-ARG JULIA_VERSION="1.11.5"
+ARG JULIA_VERSION="1.11.6"
 
 #------------------------------------------------------------------------------
 # internal-base build target: julia with OS updates and an empty @app
