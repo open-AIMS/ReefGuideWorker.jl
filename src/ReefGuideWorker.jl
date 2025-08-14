@@ -16,6 +16,9 @@ using DataFrames
 # Serialisation/deserialisation
 using Serialization
 
+# Sentry monitoring 
+using SentryIntegration
+
 # Utilities and helpers for assessments
 include("utility/utility.jl")
 
@@ -32,10 +35,22 @@ function start_worker()
     worker = create_worker_from_env()
 
     @info "Warming up regional data (expensive op which is cached in memory and disk)"
-    get_regional_data(;
-        data_path=worker.config.data_path,
-        cache_path=worker.config.cache_path
-    )
+    try
+        get_regional_data(;
+            data_path=worker.config.data_path,
+            cache_path=worker.config.cache_path
+        )
+    catch exc
+        @error "An error occurred while setting up regional data" exc
+        if !isnothing(worker.config.sentry_dsn)
+            SentryIntegration.capture_exception(
+                ErrorException(
+                    "An error occurred while setting up regional data. Cause: $(exc)."
+                )
+            )
+        end
+        rethrow(exc)
+    end
 
     # NOTE: you can perform additional setup here if needed. For example, you
     # might want to initialise data, caches or clients.
