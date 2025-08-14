@@ -39,6 +39,8 @@ end
 Context provided to job handlers with all necessary information
 """
 struct JobContext
+    "Configuration of the worker"
+    config::WorkerConfig
     "The job to be processed"
     job::Job
     "The job assignment details"
@@ -58,6 +60,7 @@ struct JobContext
 
     "Constructor that takes all fields"
     function JobContext(;
+        config::WorkerConfig,
         job::Job,
         assignment::JobAssignment,
         http_client::AuthApiClient,
@@ -68,6 +71,7 @@ struct JobContext
         data_path::String
     )
         return new(
+            config,
             job,
             assignment,
             http_client,
@@ -153,8 +157,15 @@ function process(::TypedJobHandler, context::JobContext)
 
         # Return success and the result
         return (true, result_payload)
-    catch e
-        @error "Error processing job: $e" exception = (e, catch_backtrace())
+    catch exc
+        @error "Error processing job: $exc" exception = (exc, catch_backtrace())
+        if !isnothing(context.config.sentry_dsn)
+            SentryIntegration.capture_exception(
+                ErrorException(
+                    "Error processing job. Job type: $(context.job.type). Job ID: $(context.job.id). Cause: $(exc)."
+                )
+            )
+        end
         return (false, nothing)
     end
 end
@@ -196,6 +207,13 @@ mutable struct WorkerService
             register_mock_handlers!(worker)
         else
             register_typed_handlers!(worker)
+        end
+
+        # Initialise sentry if enabled
+        if !isnothing(config.sentry_dsn)
+            @info "Initialising sentry using DSN" dsn = config.sentry_dsn
+            SentryIntegration.init(config.sentry_dsn)
+            # TODO we may wish to set sentry flags here e.g. release, version, data hash etc
         end
 
         return worker
@@ -301,8 +319,18 @@ function run_worker_loop(worker::WorkerService)
             if isnothing(job)
                 sleep(worker.config.poll_interval_ms / 1000)
             end
-        catch e
-            @error "Error in worker loop: $e" exception = (e, catch_backtrace())
+        catch exc
+            @error "Error in worker loop: $exc" exception = (exc, catch_backtrace())
+
+            # Report to sentry, if configured
+            if !isnothing(worker.config.sentry_dsn)
+                SentryIntegration.capture_exception(
+                    ErrorException(
+                        "Error in worker loop. Cause: $(exc)."
+                    )
+                )
+            end
+
             # Sleep briefly before retrying to avoid hammering the API on errors
             sleep(1.0)
         end
@@ -404,6 +432,7 @@ function process_job_completely(worker::WorkerService, job::Job)
 
         # Create context for the handler
         context = JobContext(;
+            config=worker.config,
             job=job,
             assignment=assignment,
             http_client=worker.http_client,
@@ -419,8 +448,16 @@ function process_job_completely(worker::WorkerService, job::Job)
 
         # Complete the job
         complete_job(worker, assignment.id, job, success, result_payload)
-    catch e
-        @error "Error processing job $(job.id): $e" exception = (e, catch_backtrace())
+    catch exc
+        @error "Error processing job $(job.id): $exc" exception = (exc, catch_backtrace())
+        # Report to sentry, if configured
+        if !isnothing(worker.config.sentry_dsn)
+            SentryIntegration.capture_exception(
+                ErrorException(
+                    "Unhandled error processing job $(job.id). Type $(job.type). Cause: $(exc)."
+                )
+            )
+        end
     end
 end
 
