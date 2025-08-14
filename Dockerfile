@@ -62,6 +62,10 @@ ENV JULIA_LOAD_PATH="@:@app:@v#.#:@stdlib"
 # Copy project and manifest - includes Manifest-v1.11 etc
 COPY Project.toml Manifest*.toml ./
 
+# SentryIntegration.jl fork is not on Julia registry, requiring this step
+RUN julia --project=@app \
+    -e 'using Pkg; Pkg.add(url="https://github.com/toolpath/SentryIntegration.jl", rev="main");'
+
 # Install ReefGuideWorker from source and configure it as a development
 # package in the @app shared environment.
 # Should be v speedy if the .toml file is unchanged, because all the
