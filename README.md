@@ -85,6 +85,47 @@ This worker template integrates with the ReefGuide ecosystem, connecting to the 
    docker run --env-file .env worker
    ```
 
+#### Building the sysimage
+
+To build, using docker, a current sysimage
+
+```
+docker build --target export-sysimage -f Dockerfile.build_sysimage -t sysimage .
+```
+
+Then copy the file out:
+
+```
+docker create --name temp-sysimage sysimage bash
+docker cp temp-sysimage:/reefguide_img.so ./reefguide_img.so
+docker rm temp-sysimage
+```
+
+#### Running the worker with the sysimage
+
+The main Dockerfile, once built, can be run in a sysimage mode.
+
+You need to
+
+1. mount a volume containing the sysimage file (as above)
+2. override the entrypoint and cmd to run using the sysimage
+
+The script `./launch_sysimage.sh` does this for you
+
+```
+./launch_sysimage.sh <sysimage_directory> <sysimage_name> <container_name>
+```
+
+So for example, if you have a file `sysimage.so` in the folder `sysimages`, you would run
+
+```
+./run-worker.sh ./sysimages sysimage.so worker
+```
+
+**NOTE**: the `./` relative path is important in the first argument.
+
+Where worker was the `-t` argument when building the main dockerfile.
+
 ## How It Works
 
 ### Core Architecture
