@@ -1,1 +1,1 @@
-julia -t auto --project=. -e "using Revise; using DotEnv; using Pkg; Pkg.develop(path=\"..\"); using ReefGuideWorker; DotEnv.load!();" -i
+julia -t auto --project=. -e "using Revise; using DotEnv; using ReefGuideWorker; DotEnv.load!(); ReefGuideWorker.start_worker();" -i

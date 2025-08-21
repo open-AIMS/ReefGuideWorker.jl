@@ -61,6 +61,7 @@ function check_existing_regional_data_from_disk(;
     else
         @debug "No disk cache file found" expected_path = reg_cache_filename
     end
+
     # No cache available or load failed
     return nothing
 end
@@ -91,13 +92,6 @@ function initialize_data_with_cache(;
             REGIONAL_DATA = local_data
             return nothing
         end
-
-        # Try disk cache second (faster than full reload)
-        disk_data = check_existing_regional_data_from_disk(; cache_path=cache_path)
-        if !isnothing(disk_data)
-            REGIONAL_DATA = disk_data
-            return nothing
-        end
     else
         @info "Cache invalidation forced - reloading from source files"
     end
@@ -108,21 +102,6 @@ function initialize_data_with_cache(;
 
     # Update global cache
     REGIONAL_DATA = regional_data
-
-    # Save to disk for future use
-    @info "Saving regional data to disk cache" cache_path
-    try
-        # Ensure cache directory exists
-        mkpath(cache_path)
-
-        serialize(
-            joinpath(cache_path, REGIONAL_DATA_CACHE_FILENAME),
-            regional_data
-        )
-        @info "Successfully saved regional data cache to disk"
-    catch e
-        @warn "Failed to save regional data cache to disk" error = e
-    end
 
     return nothing
 end
@@ -144,7 +123,8 @@ function get_regional_data(; data_path::String, cache_path::String)::ReefGuide.R
     @debug "Getting regional data with automatic cache management" data_path cache_path
 
     # Ensure data is loaded (with caching)
-    initialize_data_with_cache(; data_path=data_path, cache_path=cache_path)
+    ts = @elapsed initialize_data_with_cache(; data_path=data_path, cache_path=cache_path)
+    @info "Took $(ts) seconds to initialize"
 
     # Return cached data
     return REGIONAL_DATA

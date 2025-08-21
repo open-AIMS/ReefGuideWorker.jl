@@ -12,7 +12,7 @@ end
 
 # cpu_targets taken from: https://docs.julialang.org/en/v1/devdocs/sysimg/#Specifying-multiple-system-image-targets
 create_sysimage(
-    ["ReefGuideWorker"];
+    ["ReefGuideWorker", "Revise", "Infiltrator"];
     sysimage_path="reefguide_img.$ext",
     sysimage_build_args=`--strip-metadata`, # `--strip-ir --strip-metadata  --incremental=false`
     cpu_target="generic;sandybridge,-xsaveopt,clone_all;haswell,-rdrnd,base(1);x86-64-v4,-rdrnd,base(1);znver4,-rdrnd,base(1)",  # ;x86_64; haswell;skylake;skylake-avx512;tigerlake
