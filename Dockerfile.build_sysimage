@@ -1,0 +1,84 @@
+#==============================================================================
+# ReefGuide Worker: Sysimage Builder
+#==============================================================================
+# Builds a Julia system image for faster ReefGuide Worker startup times.
+# The system image is compiled using PackageCompiler.jl and can be extracted
+# from the resulting container.
+#
+# Following advice found in this Discourse thread:
+# https://discourse.julialang.org/t/creating-a-docker-base-image-for-faster-deployments/121165/2
+#
+# Also found this relevant issue:
+# https://github.com/JuliaLang/PackageCompiler.jl/issues/743
+#
+# Build:
+#   docker build --target export-sysimage -f Dockerfile.build_sysimage -t reefguide-sysimage .
+#
+# Extract sysimage:
+#   docker create --name temp-sysimage reefguide-sysimage
+#   docker cp temp-sysimage:/reefguide_img.so ./reefguide_img.so
+#   docker rm temp-sysimage
+#==============================================================================
+
+ARG JULIA_VERSION="1.11.5"
+FROM julia:${JULIA_VERSION}-bookworm AS internal-base
+
+# Since 1.9.0 Julia, the CPU target is set to "native" by default. This settings
+# avoids the need to compile the Julia packages for the specific CPU
+# architecture of the host machine Make sure the image can be used on any x86_64
+# machine by setting JULIA_CPU_TARGET to the same value used by the generic
+# julia binaries, see
+# https://github.com/JuliaCI/julia-buildkite/blob/4b6932992f7985af71fc3f73af77abf4d25bd146/utilities/build_envs.sh#L23-L31
+ENV JULIA_CPU_TARGET="generic;sandybridge,-xsaveopt,clone_all;haswell,-rdrnd,base(1);x86-64-v4,-rdrnd,base(1);znver4,-rdrnd,base(1)"
+
+ENV JULIA_VERSION=1.11.5
+ENV JULIA_DIR=/usr/local/julia
+ENV JULIA_PATH=${JULIA_DIR}
+ENV JULIA_DEPOT_PATH=/usr/local/share/julia
+ENV APP_ENV_PATH=${JULIA_DEPOT_PATH}/environments/app
+ENV APP_SRC_DIR=/usr/local/src/app
+ENV JULIA_PKG_USE_CLI_GIT=true
+
+# Update all pre-installed OS packages (to get security updates)
+# and add a few extra utilities
+RUN apt-get update \
+    && apt-get -y upgrade \
+    && apt-get install --no-install-recommends -y \
+    git \
+    openssl \
+    libssl-dev \
+    g++ \
+    curl \
+    ca-certificates \
+    gdal-bin \
+    libgdal-dev \
+    libfftw3-dev \
+    && apt-get clean \
+    && apt-get autoremove --purge \
+    && rm -rf /var/lib/apt/lists/*
+
+# Setup shared environment and add packages
+RUN mkdir -p "${JULIA_DEPOT_PATH}" \
+    && chmod 0755 "${JULIA_DEPOT_PATH}"
+
+WORKDIR "${APP_SRC_DIR}"
+
+COPY Project.toml Manifest*.toml ./
+COPY src/ src/
+
+# Build sysimage
+RUN julia -t auto --project=@app -e \
+    'using Pkg; \
+    Pkg.add(["PackageCompiler", "Infiltrator", "Revise"]); \
+    Pkg.develop(PackageSpec(path=pwd())); \
+    Pkg.instantiate(); '
+
+# Reduce number of tasks/threads to avoid heavy memory use during sysimage compilation
+# https://github.com/JuliaLang/PackageCompiler.jl/issues/1031#issuecomment-2823054267
+RUN julia --project=@app -t auto -e 'include("src/sysimage.jl")'
+
+# Export Julia sysimage to host filesystem
+# From project root
+# docker build --target export-sysimage -t reefguide-sysimage -f sandbox/smaller_sysimage/Dockerfile .
+FROM scratch AS export-sysimage
+COPY --from=internal-base /usr/local/src/app/reefguide_img.so ./reefguide_img.so
