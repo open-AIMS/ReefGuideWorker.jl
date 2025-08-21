@@ -34,7 +34,7 @@ function start_worker()
     @info "Initializing worker from environment variables..."
     worker = create_worker_from_env()
 
-    @info "Warming up regional data (expensive op which is cached in memory and disk)"
+    @info "Warming up regional data (expensive op which is cached in memory)"
     try
         get_regional_data(;
             data_path=worker.config.data_path,
