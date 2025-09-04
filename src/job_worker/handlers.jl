@@ -497,11 +497,14 @@ function handle_job(
 )::DataSpecificationUpdateOutput
     @info "Initiating data specification update task"
 
-    @info "Setting up regional data"
-    regional_data::ReefGuide.RegionalData = get_regional_data(;
-        data_path=context.data_path, cache_path=context.cache_path
-    )
+    @info "Forcing recreation of regional data given request for spec reload"
+    regional_data = ReefGuide.initialize_data(context.data_path)
     @info "Done setting up regional data"
+
+    # Access global cache variable and update it 
+    global REGIONAL_DATA
+    @info "Updating in memory cache for future use given data spec reload"
+    REGIONAL_DATA = regional_data
 
     @info "Processing regional criteria data for API update"
 
