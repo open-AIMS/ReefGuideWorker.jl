@@ -25,7 +25,8 @@ FROM julia:${JULIA_VERSION}-bookworm AS internal-base
 
 # Since 1.9.0 Julia, the CPU target is set to "native" by default. This settings
 # avoids the need to compile the Julia packages for the specific CPU
-# architecture of the host machine Make sure the image can be used on any x86_64
+# architecture of the host machine
+# Make sure the image can be used on any x86_64
 # machine by setting JULIA_CPU_TARGET to the same value used by the generic
 # julia binaries, see
 # https://github.com/JuliaCI/julia-buildkite/blob/4b6932992f7985af71fc3f73af77abf4d25bd146/utilities/build_envs.sh#L23-L31
