@@ -307,15 +307,15 @@ function handle_job(
 
     if !isfile(regional_assessment_filename)
         @debug "File system cache was not hit for this task"
-        @debug "Assessing region $(params.region)"
-        assessed = ReefGuide.assess_region(params)
+        @debug "$(now()) : Assessing region $(params.region)"
+        assessed = ReefGuide.assess_region_quality(params)
 
-        @debug now() "Writing COG of regional assessment to $(regional_assessment_filename)"
+        @debug "$(now()) : Writing COG of regional assessment to $(regional_assessment_filename)"
         # TODO would be better to not hardcode these - env variables?
         ReefGuide._write_cog(
             regional_assessment_filename, assessed; tile_size=(256,), num_threads=4
         )
-        @debug now() "Finished writing cog "
+        @debug "$(now()) : Finished writing cog "
     else
         @info "Cache hit - skipping regional assessment process and re-uploading to output!"
     end
@@ -328,9 +328,9 @@ function handle_job(
     full_s3_target = "$(context.storage_uri)/$(output_file_name_rel)"
     @debug "File paths:" relative = output_file_name_rel absolute = full_s3_target
 
-    @debug now() "Initiating file upload"
+    @debug "$(now()) : Initiating file upload"
     upload_file(client, regional_assessment_filename, full_s3_target)
-    @debug now() "File upload completed"
+    @debug "$(now()) : File upload completed"
 
     @debug "Finished regional assessment job."
     return RegionalAssessmentOutput(
@@ -501,7 +501,7 @@ function handle_job(
     regional_data = ReefGuide.initialize_data(context.data_path)
     @info "Done setting up regional data"
 
-    # Access global cache variable and update it 
+    # Access global cache variable and update it
     global REGIONAL_DATA
     @info "Updating in memory cache for future use given data spec reload"
     REGIONAL_DATA = regional_data

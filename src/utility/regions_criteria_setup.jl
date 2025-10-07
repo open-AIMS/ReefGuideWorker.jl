@@ -97,11 +97,9 @@ function initialize_data_with_cache(;
     end
 
     # No cache available or forced invalidation - load from source
+    # and update global cache
     @info "Loading regional data from source files (no cache available)"
-    regional_data = ReefGuide.initialize_data(data_path)
-
-    # Update global cache
-    REGIONAL_DATA = regional_data
+    REGIONAL_DATA = ReefGuide.initialize_data(data_path)
 
     return nothing
 end
