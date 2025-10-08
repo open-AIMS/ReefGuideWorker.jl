@@ -311,60 +311,87 @@ DATA_SPECIFICATION_UPDATE helpers
 Build the data specification update payload from regional data
 Transforms the RegionalData structure into the format expected by the API
 """
+function build_data_specification_payload_for_region(;
+    region_data::ReefGuide.RegionalDataEntry
+)::UpdateRegionInput
+    @debug "Building data specification payload for region" region_id =
+        region_data.region_id
+    # Name to use
+    region_name = region_data.region_metadata.display_name
+    @debug "Region display name" region_name
+
+    # Build criteria list
+    criteria_list = Vector{UpdateCriteriaInput}()
+    @debug "Building criteria list for region" criteria_count = length(region_data.criteria)
+
+    # Iterate through all criteria in this region
+    for (criteria_name, bounded_criteria) in region_data.criteria
+        @debug "Processing criteria: $criteria_name in $(region_data.region_id)"
+
+        # Extract bounds and metadata
+        bounds = bounded_criteria.bounds
+        metadata = bounded_criteria.metadata
+
+        # Determine default bounds (use metadata default_bounds if available, otherwise use main bounds)
+        default_bounds = something(metadata.default_bounds, bounds)
+
+        # Create the criteria input struct
+        criteria_input = UpdateCriteriaInput(;
+            name=criteria_name,
+            display_title=metadata.display_label,
+            display_subtitle=metadata.subtitle,
+            units=metadata.units,
+            min_tooltip=metadata.min_tooltip,
+            max_tooltip=metadata.max_tooltip,
+            payload_prefix=metadata.payload_prefix,
+            min_val=bounds.min,
+            max_val=bounds.max,
+            default_min_val=default_bounds.min,
+            default_max_val=default_bounds.max
+        )
+
+        push!(criteria_list, criteria_input)
+    end
+
+    # Create the region input struct
+    # Note: We'll use the region name as both name and display_name for now
+    return UpdateRegionInput(;
+        # use the ID as the name - this is a unique ID
+        name=region_data.region_id,
+        # TODO would be nice to have a display name here
+        display_name=string(region_name),
+        # TODO missing description for now
+        description=string(region_name),
+        criteria=criteria_list
+    )
+end
+
+"""
+Build the data specification update payload from regional data
+Transforms the RegionalData structure into the format expected by the API
+"""
 function build_data_specification_payload(
-    regional_data::ReefGuide.RegionalData
+    data_path::String
 )::DataSpecificationUpdatePayload
     @debug "Building data specification payload from regional data"
 
+    # Build up the region list
     regions = Vector{UpdateRegionInput}()
 
-    # Iterate through all regions in the regional data
-    for (region_name, region_data) in regional_data.regions
-        @debug "Processing region: $region_name"
-
-        criteria_list = Vector{UpdateCriteriaInput}()
-
-        # Iterate through all criteria in this region
-        for (criteria_name, bounded_criteria) in region_data.criteria
-            @debug "Processing criteria: $criteria_name in region: $region_name"
-
-            # Extract bounds and metadata
-            bounds = bounded_criteria.bounds
-            metadata = bounded_criteria.metadata
-
-            # Determine default bounds (use metadata default_bounds if available, otherwise use main bounds)
-            default_bounds = something(metadata.default_bounds, bounds)
-
-            # Create the criteria input struct
-            criteria_input = UpdateCriteriaInput(;
-                name=criteria_name,
-                display_title=metadata.display_label,
-                display_subtitle=metadata.subtitle,
-                units=metadata.units,
-                min_tooltip=metadata.min_tooltip,
-                max_tooltip=metadata.max_tooltip,
-                payload_prefix=metadata.payload_prefix,
-                min_val=bounds.min,
-                max_val=bounds.max,
-                default_min_val=default_bounds.min,
-                default_max_val=default_bounds.max
-            )
-
-            push!(criteria_list, criteria_input)
-        end
-
-        # Create the region input struct
-        # Note: We'll use the region name as both name and display_name for now
-        # You might want to add display metadata to your RegionalData structure
-        region_input = UpdateRegionInput(;
-            name=string(region_name),
-            # TODO would be nice to have a display name here
-            display_name=string(region_name),
-            # TODO missing description for now
-            description=string(region_name),
-            criteria=criteria_list
+    # Iterate through all regions in the REGIONS list from reefguide
+    for region_metadata in ReefGuide.REGIONS
+        @debug "Loading region metadata" region_id = region_metadata.id
+        # Load region data
+        region_data = ReefGuide.load_target_region(;
+            region_id=region_metadata.id, data_source_directory=data_path
         )
-
+        @debug "Finished loading region data" region_id = region_metadata.id
+        @debug "Processing region -> data spec: $region_metadata.id"
+        # Build the payload
+        region_input = build_data_specification_payload_for_region(;
+            region_data
+        )
+        # Append to the output list
         push!(regions, region_input)
     end
 

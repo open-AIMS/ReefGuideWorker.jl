@@ -287,8 +287,8 @@ function handle_job(
     @info "Initiating regional assessment task"
 
     @info "Setting up regional assessment data"
-    regional_data::ReefGuide.RegionalData = get_regional_data(;
-        data_path=context.data_path, cache_path=context.cache_path
+    regional_data::ReefGuide.RegionalData = prepare_target_regional_data(;
+        data_path=context.data_path, region_id=input.region
     )
     @info "Done setting up regional assessment data"
 
@@ -402,8 +402,8 @@ function handle_job(
     @info "Initiating site assessment task"
 
     @info "Setting up regional assessment data"
-    regional_data::ReefGuide.RegionalData = get_regional_data(;
-        data_path=context.data_path, cache_path=context.cache_path
+    regional_data::ReefGuide.RegionalData = prepare_target_regional_data(;
+        data_path=context.data_path, region_id=input.region
     )
     @info "Done setting up regional assessment data"
 
@@ -497,21 +497,9 @@ function handle_job(
 )::DataSpecificationUpdateOutput
     @info "Initiating data specification update task"
 
-    @info "Forcing recreation of regional data given request for spec reload"
-    regional_data = ReefGuide.initialize_data(context.data_path)
-    @info "Done setting up regional data"
-
-    # Access global cache variable and update it 
-    global REGIONAL_DATA
-    @info "Updating in memory cache for future use given data spec reload"
-    REGIONAL_DATA = regional_data
-
-    @info "Processing regional criteria data for API update"
-
     # Build the data specification payload from regional data
-    payload = build_data_specification_payload(regional_data)
+    payload = build_data_specification_payload(context.data_path)
 
-    @debug "Cache buster value: $(input.cache_buster)"
     @info "Built payload for $(length(payload.regions)) regions"
 
     # POST the payload to the API endpoint
