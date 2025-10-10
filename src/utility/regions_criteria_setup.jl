@@ -99,7 +99,11 @@ function initialize_data_with_cache(;
     # No cache available or forced invalidation - load from source
     # and update global cache
     @info "Loading regional data from source files (no cache available)"
-    REGIONAL_DATA = ReefGuide.initialize_data(data_path)
+    REGIONAL_DATA = ReefGuide.initialize_data(;
+        data_source_directory=data_path,
+        # Disable regional data loading
+        handle_regions=false
+    )
 
     return nothing
 end
@@ -110,14 +114,18 @@ Get regional data with automatic cache management.
 Primary interface for accessing regional data. Handles initialization
 and caching automatically.
 
+NOTE: does not by default initialise any regional data.
+
 # Arguments
 - `data_path::String` : Path to the regional data source files
 - `cache_path::String` : Directory where cache files are stored
 
 # Returns
-`ReefGuide.RegionalData` struct containing all regional information.
+`ReefGuide.RegionalData` struct containing regional info.
 """
-function get_regional_data(; data_path::String, cache_path::String)::ReefGuide.RegionalData
+function setup_shared_regional_data(;
+    data_path::String, cache_path::String
+)::ReefGuide.RegionalData
     @debug "Getting regional data with automatic cache management" data_path cache_path
 
     # Ensure data is loaded (with caching)
@@ -125,5 +133,48 @@ function get_regional_data(; data_path::String, cache_path::String)::ReefGuide.R
     @info "Took $(ts) seconds to initialize"
 
     # Return cached data
+    return REGIONAL_DATA
+end
+
+"""
+Dispels regional dictionary, then loads and sets up a specific region in the
+data dictionary
+
+# Arguments
+- `data_path::String` : Path to the regional data source files
+- `region_id` : The region to load up
+
+# Returns
+`ReefGuide.RegionalData` struct containing regional info.
+"""
+function prepare_target_regional_data(;
+    data_path::String,
+    region_id::String
+)::ReefGuide.RegionalData
+    # Access global cache variable
+    global REGIONAL_DATA
+
+    # Check if we already have the loaded region - great success!
+    if haskey(REGIONAL_DATA.regions, region_id)
+        @info "Region $region_id already loaded in memory cache - skipping load"
+        return REGIONAL_DATA
+    end
+
+    # Dispel all old data
+    empty!(REGIONAL_DATA.regions)
+
+    # Build the new entry into dict
+    try
+        REGIONAL_DATA.regions[region_id] = ReefGuide.load_target_region(;
+            data_source_directory=data_path,
+            region_id=region_id
+        )
+    catch
+        @error "Failed to setup regional data dictionary" region_id = region_metadata.id error =
+            e
+        rethrow(e)
+    end
+
+    # Return updated in-memory cache
     return REGIONAL_DATA
 end

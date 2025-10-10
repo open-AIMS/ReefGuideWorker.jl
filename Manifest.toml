@@ -1546,9 +1546,9 @@ version = "1.3.4"
 
 [[deps.ReefGuide]]
 deps = ["ArchGDAL", "CoordinateTransformations", "DataFrames", "Dates", "DiskArrays", "Distances", "ExtendableSparse", "FLoops", "GeoDataFrames", "GeoFormatTypes", "GeoInterface", "GeoJSON", "GeoParquet", "GeometryBasics", "GeometryOps", "Glob", "ImageIO", "Interpolations", "LibGEOS", "LinearAlgebra", "Logging", "Mmap", "NearestNeighbors", "OrderedCollections", "PrecompileSignatures", "PrecompileTools", "Proj", "Rasters", "Serialization", "SortTileRecursiveTree", "SparseArrays", "StaticArrays", "Statistics", "StructTypes", "ThreadsX"]
-git-tree-sha1 = "54fd17be43106df6953e728fd3220816fcc9c5b3"
+git-tree-sha1 = "26a169cfb2e8a6c128958eb1df040e21ff79640d"
 uuid = "cee0a5fb-9790-4c4c-b8b7-e40ecbebeb72"
-version = "0.1.10"
+version = "0.1.11"
 
 [[deps.Reexport]]
 git-tree-sha1 = "45e428421666073eab6f2da5c9d310d99bb12f9b"
