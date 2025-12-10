@@ -1,8 +1,8 @@
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.11.6"
+julia_version = "1.11.7"
 manifest_format = "2.0"
-project_hash = "c2bdc0387e8136063ba183e1e83b12b0a283f1ef"
+project_hash = "60a3e79bebd0369c0c41b870b96affad72241d4f"
 
 [[deps.AWS]]
 deps = ["Base64", "Compat", "Dates", "Downloads", "GitHub", "HTTP", "IniFile", "JSON", "MbedTLS", "Mocking", "OrderedCollections", "Random", "SHA", "ScopedValues", "Sockets", "URIs", "UUIDs", "XMLDict"]
@@ -1546,9 +1546,9 @@ version = "1.3.4"
 
 [[deps.ReefGuide]]
 deps = ["ArchGDAL", "CoordinateTransformations", "DataFrames", "Dates", "DiskArrays", "Distances", "ExtendableSparse", "FLoops", "GeoDataFrames", "GeoFormatTypes", "GeoInterface", "GeoJSON", "GeoParquet", "GeometryBasics", "GeometryOps", "Glob", "ImageIO", "Interpolations", "LibGEOS", "LinearAlgebra", "Logging", "Mmap", "NearestNeighbors", "OrderedCollections", "PrecompileSignatures", "PrecompileTools", "Proj", "Rasters", "Serialization", "SortTileRecursiveTree", "SparseArrays", "StaticArrays", "Statistics", "StructTypes", "ThreadsX"]
-git-tree-sha1 = "26a169cfb2e8a6c128958eb1df040e21ff79640d"
+git-tree-sha1 = "5bc75330dc6dfcab6624eae44a3a3650182650bd"
 uuid = "cee0a5fb-9790-4c4c-b8b7-e40ecbebeb72"
-version = "0.1.11"
+version = "0.1.12"
 
 [[deps.Reexport]]
 git-tree-sha1 = "45e428421666073eab6f2da5c9d310d99bb12f9b"

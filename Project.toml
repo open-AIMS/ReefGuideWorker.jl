@@ -1,7 +1,7 @@
 name = "ReefGuideWorker"
 uuid = "bfbf1be7-3acf-4d22-85ac-d1a66a717289"
 authors = ["Peter Baker", "Takuya Iwanaga", "Arlo White"]
-version = "0.1.0"
+version = "0.1.1"
 
 [deps]
 AWS = "fbe9abb3-538b-5e4e-ba9e-bc94f4f92ebc"
@@ -33,6 +33,6 @@ Logging = "1.11.0"
 Minio = "0.2.2"
 PrecompileSignatures = "3.0.3"
 Random = "1.11.0"
-ReefGuide = "0.1.11"
+ReefGuide = "0.1.12"
 SentryIntegration = "0.7.1"
 Serialization = "1.11.0"
