@@ -164,3 +164,10 @@ Workers can read from and write to S3-compatible storage:
 ## Threading
 
 The worker is designed to be single-threaded per job but can utilize Julia's threading for computationally intensive tasks within job handlers.
+
+## Release
+
+1. Bump the version in _Project.toml_
+2. [Create a new release](https://github.com/open-AIMS/ReefGuideWorker.jl/releases/new) and tag (`vX.Y.Z` format)
+3. This will trigger the [PublishDockerImage](https://github.com/open-AIMS/ReefGuideWorker.jl/actions/workflows/PublishDockerImage.yml) workflow. (This workflow can also be triggered manually)
+4. [Packages](https://github.com/open-AIMS/ReefGuideWorker.jl/pkgs/container/reefguideworker.jl%2Freefguide-worker) should list the new image
