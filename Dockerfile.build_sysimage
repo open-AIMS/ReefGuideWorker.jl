@@ -68,9 +68,11 @@ COPY Project.toml Manifest*.toml ./
 COPY src/ src/
 
 # Build sysimage
+# NOTE: Revise/Infiltrator are intentionally not installed here - they are
+# dev-only tools and must not end up baked into the production sysimage.
 RUN julia -t auto --project=@app -e \
     'using Pkg; \
-    Pkg.add(["PackageCompiler", "Infiltrator", "Revise"]); \
+    Pkg.add("PackageCompiler"); \
     Pkg.develop(PackageSpec(path=pwd())); \
     Pkg.instantiate(); '
 
