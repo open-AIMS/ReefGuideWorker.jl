@@ -1,5 +1,5 @@
 # See https://hub.docker.com/_/julia for valid versions.
-ARG JULIA_VERSION="1.11.7"
+ARG JULIA_VERSION="1.12.6"
 
 #------------------------------------------------------------------------------
 # internal-base build target: julia with OS updates and an empty @app
@@ -59,7 +59,7 @@ RUN mkdir -p "${JULIA_DEPOT_PATH}" && \
 # (See https://docs.julialang.org/en/v1/manual/environment-variables/#JULIA_LOAD_PATH)
 ENV JULIA_LOAD_PATH="@:@app:@v#.#:@stdlib"
 
-# Copy project and manifest - includes Manifest-v1.11 etc
+# Copy project and manifest - includes Manifest-v1.12 etc
 COPY Project.toml Manifest*.toml ./
 
 # SentryIntegration.jl fork is not on Julia registry, requiring this step
