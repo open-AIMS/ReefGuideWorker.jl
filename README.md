@@ -45,11 +45,11 @@ This worker template integrates with the ReefGuide ecosystem, connecting to the 
 
 ### Prerequisites
 
-- Install Julia 1.11.x using [juliaup](https://github.com/JuliaLang/juliaup):
+- Install Julia 1.12.x using [juliaup](https://github.com/JuliaLang/juliaup):
   ```bash
   curl -fsSL https://install.julialang.org | sh
-  juliaup add 1.11
-  juliaup default 1.11
+  juliaup add 1.12
+  juliaup default 1.12
   ```
 
 ### Setup and Development

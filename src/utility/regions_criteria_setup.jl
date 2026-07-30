@@ -169,9 +169,8 @@ function prepare_target_regional_data(;
             data_source_directory=data_path,
             region_id=region_id
         )
-    catch
-        @error "Failed to setup regional data dictionary" region_id = region_metadata.id error =
-            e
+    catch e
+        @error "Failed to setup regional data dictionary" region_id = region_id error = e
         rethrow(e)
     end
 

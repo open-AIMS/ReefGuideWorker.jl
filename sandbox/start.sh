@@ -1,1 +1,1 @@
-julia -t auto --project=. --heap-size-hint=14GB -e "ENV[\"JULIA_DEBUG\"] = \"ReefGuideWorker,ReefGuide\"; using Revise; using DotEnv; using ReefGuideWorker; DotEnv.load!(); ReefGuideWorker.start_worker();" -i
+cd "$(dirname "$0")" && julia -t auto,1 --project=. --heap-size-hint=14GB -e "ENV[\"JULIA_DEBUG\"] = \"ReefGuideWorker,ReefGuide\"; using Revise; using DotEnv; using ReefGuideWorker; DotEnv.load!(); ReefGuideWorker.start_worker();" -i

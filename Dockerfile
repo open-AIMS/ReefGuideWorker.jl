@@ -1,5 +1,5 @@
 # See https://hub.docker.com/_/julia for valid versions.
-ARG JULIA_VERSION="1.11.7"
+ARG JULIA_VERSION="1.12.6"
 
 #------------------------------------------------------------------------------
 # internal-base build target: julia with OS updates and an empty @app
@@ -59,7 +59,7 @@ RUN mkdir -p "${JULIA_DEPOT_PATH}" && \
 # (See https://docs.julialang.org/en/v1/manual/environment-variables/#JULIA_LOAD_PATH)
 ENV JULIA_LOAD_PATH="@:@app:@v#.#:@stdlib"
 
-# Copy project and manifest - includes Manifest-v1.11 etc
+# Copy project and manifest - includes Manifest-v1.12 etc
 COPY Project.toml Manifest*.toml ./
 
 # SentryIntegration.jl fork is not on Julia registry, requiring this step
@@ -95,8 +95,17 @@ ENV APP_ENV_DIR="${JULIA_DEPOT_PATH}/environments/app" \
 # /data/.config.toml
 VOLUME ["/data/app"]
 
-# By default, drops the user into a  julia shell with ReefGuideWorker activated
-ENTRYPOINT ["julia", "--project=@app", "-t", "auto,1", "-e"]
+# Julia thread pool size. `-t`/`--threads` would take precedence over this and
+# is deliberately NOT passed on the command line, so this is the only knob:
+# derive it from the deployment's actual vCPU allocation (ECS task definition
+# environment, docker run -e, etc.) rather than letting Julia's `-t auto`
+# infer it from the host cgroup, which does not reflect a Fargate task's CFS
+# quota at fractional/low vCPU allocations. The default below (4 worker
+# threads, 1 interactive) is only a fallback for ad-hoc/local use.
+ENV JULIA_NUM_THREADS="4,1"
+
+# By default, drops the user into a julia shell with ReefGuideWorker activated
+ENTRYPOINT ["julia", "--project=@app", "-e"]
 
 # Derived applications should override the command e.g. to start
 CMD ["using ReefGuideWorker; ReefGuideWorker.start_worker()"]
