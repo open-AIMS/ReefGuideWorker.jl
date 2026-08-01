@@ -10,6 +10,9 @@ using Base.Threads
 # Critical import for reefguide assessment methods
 using ReefGuide
 
+# Geospatial - GeometryOps.GI.Wrappers used to build fast-assessment polygon scopes
+using GeometryOps
+
 # Collections
 using DataFrames
 
