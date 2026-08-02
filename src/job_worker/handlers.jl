@@ -621,6 +621,19 @@ function handle_job(
     )
     @info "Done setting up scoped regional assessment data"
 
+    # Guard: if the scope doesn't intersect any reef data, fail with a clear message
+    # rather than crashing inside assess_region_quality.
+    scoped_slope_table = regional_data.regions[input.region].slope_table
+    if nrow(scoped_slope_table) == 0
+        throw(
+            ErrorException(
+                "No reef data found within the requested scope for region '$(input.region)'. " *
+                "Try selecting a larger area or an area that overlaps with known reef data."
+            )
+        )
+    end
+    @info "Scoped slope table has $(nrow(scoped_slope_table)) rows"
+
     @info "Compiling regional assessment parameters from regional data and input data"
     params = build_regional_assessment_parameters(
         regional_job_from_fast_regional_job(input),
@@ -685,6 +698,18 @@ function handle_job(
         data_path=context.data_path, region_id=input.region, scope=scope
     )
     @info "Done setting up scoped regional assessment data"
+
+    # Guard: if the scope doesn't intersect any reef data, fail with a clear message.
+    scoped_slope_table = regional_data.regions[input.region].slope_table
+    if nrow(scoped_slope_table) == 0
+        throw(
+            ErrorException(
+                "No reef data found within the requested scope for region '$(input.region)'. " *
+                "Try selecting a larger area or an area that overlaps with known reef data."
+            )
+        )
+    end
+    @info "Scoped slope table has $(nrow(scoped_slope_table)) rows"
 
     @info "Compiling suitability assessment parameters from regional data and job inputs"
     params::ReefGuide.SuitabilityAssessmentParameters = build_suitability_assessment_parameters(
