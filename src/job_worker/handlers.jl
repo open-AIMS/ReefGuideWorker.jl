@@ -621,18 +621,8 @@ function handle_job(
     )
     @info "Done setting up scoped regional assessment data"
 
-    # Guard: if the scope doesn't intersect any reef data, fail with a clear message
-    # rather than crashing inside assess_region_quality.
-    scoped_slope_table = regional_data.regions[input.region].slope_table
-    if nrow(scoped_slope_table) == 0
-        throw(
-            ErrorException(
-                "No reef data found within the requested scope for region '$(input.region)'. " *
-                "Try selecting a larger area or an area that overlaps with known reef data."
-            )
-        )
-    end
-    @info "Scoped slope table has $(nrow(scoped_slope_table)) rows"
+    scoped_row_count = nrow(regional_data.regions[input.region].slope_table)
+    @info "Scoped slope table has $(scoped_row_count) rows (0 = no reef data in viewport)"
 
     @info "Compiling regional assessment parameters from regional data and input data"
     params = build_regional_assessment_parameters(
@@ -699,17 +689,8 @@ function handle_job(
     )
     @info "Done setting up scoped regional assessment data"
 
-    # Guard: if the scope doesn't intersect any reef data, fail with a clear message.
-    scoped_slope_table = regional_data.regions[input.region].slope_table
-    if nrow(scoped_slope_table) == 0
-        throw(
-            ErrorException(
-                "No reef data found within the requested scope for region '$(input.region)'. " *
-                "Try selecting a larger area or an area that overlaps with known reef data."
-            )
-        )
-    end
-    @info "Scoped slope table has $(nrow(scoped_slope_table)) rows"
+    scoped_row_count = nrow(regional_data.regions[input.region].slope_table)
+    @info "Scoped slope table has $(scoped_row_count) rows (0 = no reef data in viewport)"
 
     @info "Compiling suitability assessment parameters from regional data and job inputs"
     params::ReefGuide.SuitabilityAssessmentParameters = build_suitability_assessment_parameters(
