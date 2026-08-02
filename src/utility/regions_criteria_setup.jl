@@ -177,3 +177,55 @@ function prepare_target_regional_data(;
     # Return updated in-memory cache
     return REGIONAL_DATA
 end
+
+"""
+Loads a single region narrowed to a spatial scope, for the fast/preview
+assessment path.
+
+Deliberately does NOT read from or write to the shared `REGIONAL_DATA`
+in-memory cache used by `prepare_target_regional_data`: that cache holds one
+full (unscoped) region per entry, keyed only by `region_id`, and is reused
+verbatim on a cache hit. A scoped load must never be stored there (a later
+full-region request would incorrectly receive scoped/narrowed data) and must
+never read a cached full-region entry back as if it were scoped (defeats the
+purpose of narrowing). Each call loads its own throwaway
+`ReefGuide.RegionalData` containing just the requested, scoped region.
+
+# Arguments
+- `data_path::String` : Path to the regional data source files
+- `region_id` : The region to load
+- `scope` : A `ReefGuide.SpatialScope` (bbox or polygon) to narrow the region to
+
+# Returns
+`ReefGuide.RegionalData` struct containing only `region_id`, scoped.
+
+!!! note
+    `scope` is intentionally left untyped rather than annotated
+    `::ReefGuide.SpatialScope`. `SpatialScope`/`BBoxScope`/`PolygonScope` are
+    new in an unreleased ReefGuide.jl (see `Project.toml` compat bump to
+    `0.2.0`, still resolving to `0.1.12` in `Manifest.toml` pending
+    registration); a type annotation referencing `ReefGuide.SpatialScope` is
+    evaluated at method-definition time and would break precompilation
+    against the currently-pinned version. Tighten this to
+    `scope::ReefGuide.SpatialScope` once ReefGuide.jl is bumped past 0.2.0.
+"""
+function prepare_fast_target_regional_data(;
+    data_path::String,
+    region_id::String,
+    scope
+)::ReefGuide.RegionalData
+    try
+        entry = ReefGuide.load_target_region(;
+            data_source_directory=data_path,
+            region_id=region_id,
+            scope=scope
+        )
+        return ReefGuide.RegionalData(;
+            regions=Dict(region_id => entry),
+            reef_outlines=DataFrame()
+        )
+    catch e
+        @error "Failed to setup scoped regional data" region_id = region_id error = e
+        rethrow(e)
+    end
+end

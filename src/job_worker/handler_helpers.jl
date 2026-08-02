@@ -155,6 +155,229 @@ function regional_job_from_suitability_job(
 end
 
 """
+=====================================================
+FAST_REGIONAL_ASSESSMENT / FAST_SUITABILITY_ASSESSMENT helpers
+=====================================================
+"""
+
+"""
+Converts a fast regional job's `scope` GeoJSON polygon into a
+GeoInterface-compatible geometry, as expected by `ReefGuide.PolygonScope`.
+"""
+function build_geo_interface_polygon(geometry::GeoJSONPolygonInput)
+    rings = [[(pt[1], pt[2]) for pt in ring] for ring in geometry.coordinates]
+    return GeometryOps.GI.Wrappers.Polygon(rings)
+end
+
+"""
+Translates a `BBoxScopeInput` (parsed job payload scope) into a
+`ReefGuide.BBoxScope`.
+
+!!! note
+    Not annotated `::ReefGuide.SpatialScope` - see the note on
+    `prepare_fast_target_regional_data` (`utility/regions_criteria_setup.jl`)
+    for why: that type doesn't exist in the currently-pinned ReefGuide.jl
+    version, and a return-type annotation is evaluated at method-definition
+    time, so it would break precompilation.
+"""
+function build_spatial_scope(scope::BBoxScopeInput)
+    min_lon, min_lat, max_lon, max_lat = scope.bounds
+    return ReefGuide.BBoxScope(min_lon, min_lat, max_lon, max_lat)
+end
+
+"""
+Translates a `PolygonScopeInput` (parsed job payload scope) into a
+`ReefGuide.PolygonScope`. See the note on `build_spatial_scope(::BBoxScopeInput)`
+for why this isn't annotated `::ReefGuide.SpatialScope`.
+"""
+function build_spatial_scope(scope::PolygonScopeInput)
+    return ReefGuide.PolygonScope(build_geo_interface_polygon(scope.geometry))
+end
+
+"""
+Converts parameters from a fast regional job into a regular regional job
+(the `scope` field is handled separately - see `build_spatial_scope` -
+since `RegionalAssessmentInput` has no `scope` field).
+"""
+function regional_job_from_fast_regional_job(
+    fast_job::FastRegionalAssessmentInput
+)::RegionalAssessmentInput
+    return RegionalAssessmentInput(
+        fast_job.region,
+        fast_job.reef_type,
+        fast_job.depth_min,
+        fast_job.depth_max,
+        fast_job.high_tide_min,
+        fast_job.high_tide_max,
+        fast_job.low_tide_min,
+        fast_job.low_tide_max,
+        fast_job.rugosity_min,
+        fast_job.rugosity_max,
+        fast_job.slope_min,
+        fast_job.slope_max,
+        fast_job.turbidity_min,
+        fast_job.turbidity_max,
+        fast_job.waves_height_min,
+        fast_job.waves_height_max,
+        fast_job.waves_period_min,
+        fast_job.waves_period_max
+    )
+end
+
+"""
+Converts parameters from a fast suitability job into a regular suitability
+job (the `scope` field is handled separately - see `build_spatial_scope` -
+since `SuitabilityAssessmentInput` has no `scope` field).
+"""
+function suitability_job_from_fast_suitability_job(
+    fast_job::FastSuitabilityAssessmentInput
+)::SuitabilityAssessmentInput
+    return SuitabilityAssessmentInput(
+        fast_job.region,
+        fast_job.reef_type,
+        fast_job.depth_min,
+        fast_job.depth_max,
+        fast_job.high_tide_min,
+        fast_job.high_tide_max,
+        fast_job.low_tide_min,
+        fast_job.low_tide_max,
+        fast_job.rugosity_min,
+        fast_job.rugosity_max,
+        fast_job.slope_min,
+        fast_job.slope_max,
+        fast_job.turbidity_min,
+        fast_job.turbidity_max,
+        fast_job.waves_height_min,
+        fast_job.waves_height_max,
+        fast_job.waves_period_min,
+        fast_job.waves_period_max,
+        fast_job.threshold,
+        fast_job.x_dist,
+        fast_job.y_dist
+    )
+end
+
+"""
+Returns hash components for a spatial scope. Correctness-critical: two
+different viewports/polygons must not collide in the fast-assessment cache
+(see `.claude/plans/2026-07-31_slow_fast_assessment_feature.md`).
+"""
+function get_hash_components_from_scope(scope::BBoxScopeInput)::Vector{String}
+    return ["bbox", string.(scope.bounds)...]
+end
+
+function get_hash_components_from_scope(scope::PolygonScopeInput)::Vector{String}
+    ring_strings = [
+        join((join(pt, ",") for pt in ring), ";") for ring in scope.geometry.coordinates
+    ]
+    return ["polygon", join(ring_strings, "|")]
+end
+
+"""
+Generate a deterministic hash string for a fast regional assessment.
+
+Same as `regional_assessment_params_hash`, plus the spatial `scope`, so
+two different viewports produce distinct cache entries.
+
+# Arguments
+- `params::RegionalAssessmentParameters` : Assessment parameters to hash
+- `scope::SpatialScopeInput` : The job's spatial scope (bbox or polygon)
+
+# Returns
+String hash suitable for use in cache file names.
+"""
+function fast_regional_assessment_params_hash(
+    params::ReefGuide.RegionalAssessmentParameters, scope::SpatialScopeInput
+)::String
+    @debug "Generating hash for fast regional assessment parameters" region = params.region
+
+    hash_components = [
+        params.region,
+        get_hash_components_from_scope(scope)...,
+        get_hash_components_from_regional_criteria(params.regional_criteria)...
+    ]
+
+    hash_string = build_hash_from_components(hash_components)
+
+    @debug "Generated fast regional assessment parameters hash" hash = hash_string components_count = length(
+        hash_components
+    )
+
+    return hash_string
+end
+
+"""
+Generate a deterministic hash string for a fast suitability assessment.
+
+Same as `suitability_assessment_params_hash`, plus the spatial `scope`, so
+two different viewports produce distinct cache entries.
+
+# Arguments
+- `params::SuitabilityAssessmentParameters` : Assessment parameters to hash
+- `scope::SpatialScopeInput` : The job's spatial scope (bbox or polygon)
+
+# Returns
+String hash suitable for use in cache file names.
+"""
+function fast_suitability_assessment_params_hash(
+    params::ReefGuide.SuitabilityAssessmentParameters, scope::SpatialScopeInput
+)::String
+    @debug "Generating hash for fast suitability assessment parameters" region =
+        params.region threshold =
+        params.suitability_threshold x_dist = params.x_dist y_dist = params.y_dist
+
+    hash_components = [
+        params.region,
+        string(params.suitability_threshold),
+        string(params.x_dist),
+        string(params.y_dist),
+        get_hash_components_from_scope(scope)...,
+        get_hash_components_from_regional_criteria(params.regional_criteria)...
+    ]
+
+    hash_string = build_hash_from_components(hash_components)
+
+    @debug "Generated fast suitability assessment parameters hash" hash = hash_string components_count = length(
+        hash_components
+    )
+
+    return hash_string
+end
+
+"""
+Build predictable file path for fast regional assessment results in the
+configured cache location. Mirrors `build_regional_assessment_file_path`,
+but keys the cache file name off `fast_regional_assessment_params_hash`
+(which includes `scope`) so two different viewports never collide.
+
+# Arguments
+- `params::RegionalAssessmentParameters` : Regional assessment parameters
+- `scope::SpatialScopeInput` : The job's spatial scope (bbox or polygon)
+- `ext::String` : File extension for the cache file
+- `cache_path::String` : Location to cache
+
+# Returns
+String path to cache file location.
+"""
+function build_fast_regional_assessment_file_path(
+    params::ReefGuide.RegionalAssessmentParameters,
+    scope::SpatialScopeInput;
+    ext::String,
+    cache_path::String
+)::String
+    @debug "Building file path for fast regional assessment cache" region = params.region ext
+
+    param_hash = fast_regional_assessment_params_hash(params, scope)
+    filename = "$(param_hash)_$(params.region)_fast_regional_assessment.$(ext)"
+    file_path = joinpath(cache_path, filename)
+
+    @debug "Built fast regional assessment file path" file_path region = params.region hash =
+        param_hash
+
+    return file_path
+end
+
+"""
 Generate a deterministic hash string for RegionalAssessmentParameters.
 
 Creates a consistent hash based on assessment parameters that can be used
@@ -286,8 +509,8 @@ function merge_bounds(
     end
 
     bounds = ReefGuide.Bounds(;
-        min=!isnothing(user_min) ? user_min : criteria.bounds.min,
-        max=!isnothing(user_max) ? user_max : criteria.bounds.max
+        min=(!isnothing(user_min) ? user_min : criteria.bounds.min),
+        max=(!isnothing(user_max) ? user_max : criteria.bounds.max)
     )
 
     @debug """

@@ -10,14 +10,19 @@ using Base.Threads
 # Critical import for reefguide assessment methods
 using ReefGuide
 
+# Geospatial - GeometryOps.GI.Wrappers used to build fast-assessment polygon scopes
+using GeometryOps
+
 # Collections
 using DataFrames
 
 # Serialisation/deserialisation
 using Serialization
 
-# Sentry monitoring 
+# Sentry monitoring
 using SentryIntegration
+
+using Dates
 
 # Utilities and helpers for assessments
 include("utility/utility.jl")
