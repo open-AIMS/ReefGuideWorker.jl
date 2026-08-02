@@ -357,7 +357,7 @@ end
 
 function poll_for_job(worker::WorkerService)::Union{Job,Nothing}
     try
-        # Get available jobs 
+        # Get available jobs
         # TODO if we only handle specific subsets, might want to filter more here
         response = HTTPGet(
             worker.http_client, "/jobs/poll";
@@ -443,8 +443,18 @@ function process_job_completely(worker::WorkerService, job::Job)
             data_path=worker.config.data_path
         )
 
-        # Process the job with the handler
+        # Process the job with the handler, capturing timing and peak RSS for dev logging
+        t_start = time()
         success, result_payload = process(handler, context)
+        elapsed_s = round(time() - t_start; digits=2)
+        peak_rss_mb = round(Sys.maxrss() / 1024^2; digits=1)
+
+        # Inject performance metadata into the result payload (visible in dev console logs)
+        if isa(result_payload, AbstractDict)
+            result_payload["_perf"] = Dict(
+                "time_taken_s" => elapsed_s, "peak_rss_mb" => peak_rss_mb
+            )
+        end
 
         # Complete the job
         complete_job(worker, assignment.id, job, success, result_payload)
