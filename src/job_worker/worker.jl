@@ -415,6 +415,7 @@ end
 Process a job completely (claim, process, complete)
 """
 function process_job_completely(worker::WorkerService, job::Job)
+    assignment = nothing
     try
         # Try to claim the job
         assignment = claim_job(worker, job)
@@ -466,6 +467,14 @@ function process_job_completely(worker::WorkerService, job::Job)
                 ErrorException(
                     "Unhandled error processing job $(job.id). Type $(job.type). Cause: $(exc)."
                 )
+            )
+        end
+        # Mark the job as FAILED so it doesn't stay IN_PROGRESS forever (e.g. OOM kill
+        # or any unhandled exception after the job was claimed).
+        if !isnothing(assignment)
+            complete_job(
+                worker, assignment.id, job, false,
+                Dict("error" => "Unhandled worker exception: $(exc)")
             )
         end
     end
