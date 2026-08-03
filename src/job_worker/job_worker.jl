@@ -8,6 +8,7 @@ using AWS
 using Random
 using JSONWebTokens
 using Minio
+using Statistics
 
 include("config.jl")
 include("ecs.jl")

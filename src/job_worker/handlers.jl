@@ -17,6 +17,7 @@ Enum for job types matching the API definition
     DATA_SPECIFICATION_UPDATE
     FAST_REGIONAL_ASSESSMENT
     FAST_SUITABILITY_ASSESSMENT
+    POLYGON_CRITERIA_STATS
 end
 
 symbol_to_job_type = Dict(zip(Symbol.(instances(JobType)), instances(JobType)))
@@ -799,10 +800,171 @@ function handle_job(
 end
 
 #
-# ====
-# INIT
-# ====
+# ========================
+# POLYGON_CRITERIA_STATS
+# ========================
 #
+
+"""
+Input payload for POLYGON_CRITERIA_STATS job.
+
+Mirrors the TypeScript `PolygonCriteriaStatsInput` schema.
+"""
+struct PolygonCriteriaStatsInput <: AbstractJobInput
+    "GeoJSON Polygon geometry of the user-drawn polygon"
+    polygon::GeoJSONPolygonInput
+    "Region ID (e.g. \"Townsville-Whitsunday\")"
+    region::String
+    "Criteria IDs to compute stats for (non-disabled criteria)"
+    criteria::Vector{String}
+end
+
+"""
+Output payload for POLYGON_CRITERIA_STATS job.
+
+`stats` is a Dict mapping criteria ID → stat Dict (bins, min, max, …).
+Serialised via JSON3.write → the nested Dict keys (including \"end\") round-trip
+correctly through JSON without hitting Julia's `end` keyword restriction.
+Mirrors the TypeScript `PolygonCriteriaStatsOutput` schema.
+"""
+struct PolygonCriteriaStatsOutput <: AbstractJobOutput
+    stats::Dict{String,Any}
+    computed_at::String
+    criteria_snapshot::Vector{String}
+end
+
+"""
+Handler for POLYGON_CRITERIA_STATS jobs.
+"""
+struct PolygonCriteriaStatsHandler <: AbstractJobHandler end
+
+"""
+Compute histogram bins and summary statistics for a vector of Float64 values.
+
+Returns a Dict matching the TypeScript `CriteriaStat` schema:
+  { bins: [{start, end, count}], min, max, mean, median, p5, p95, nodata_count }
+
+`nodata_count` reflects values that were missing/non-finite *before* this
+function is called (passed in as a pre-computed integer).
+"""
+function _compute_criteria_stat(
+    values::Vector{Float64},
+    nodata_count::Int,
+    n_bins::Int=20
+)::Dict{String,Any}
+    if isempty(values)
+        return Dict{String,Any}(
+            "bins" => Vector{Dict{String,Any}}(),
+            "min" => 0.0,
+            "max" => 0.0,
+            "mean" => 0.0,
+            "median" => 0.0,
+            "p5" => 0.0,
+            "p95" => 0.0,
+            "nodata_count" => nodata_count
+        )
+    end
+
+    vmin = minimum(values)
+    vmax = maximum(values)
+    vmean = mean(values)
+    vmedian = median(values)
+    vp5 = quantile(values, 0.05)
+    vp95 = quantile(values, 0.95)
+
+    # Build histogram bins
+    bin_width = vmax == vmin ? 1.0 : (vmax - vmin) / n_bins
+    actual_bins = vmax == vmin ? 1 : n_bins
+    bins = Vector{Dict{String,Any}}(undef, actual_bins)
+    for i in 1:actual_bins
+        bin_start = vmin + (i - 1) * bin_width
+        bin_end = vmin + i * bin_width
+        # Use half-open [start, end) intervals; last bin is fully closed
+        bin_count = if i < actual_bins
+            count(x -> bin_start <= x < bin_end, values)
+        else
+            count(x -> bin_start <= x <= bin_end, values)
+        end
+        bins[i] = Dict{String,Any}(
+            "start" => bin_start,
+            "end" => bin_end,
+            "count" => bin_count
+        )
+    end
+
+    return Dict{String,Any}(
+        "bins" => bins,
+        "min" => vmin,
+        "max" => vmax,
+        "mean" => vmean,
+        "median" => vmedian,
+        "p5" => vp5,
+        "p95" => vp95,
+        "nodata_count" => nodata_count
+    )
+end
+
+"""
+Handler for the polygon criteria stats job.
+
+Loads regional data, narrows the slope table to the user-drawn polygon using
+`ReefGuide.apply_spatial_scope`, then computes histogram + summary statistics
+for each requested criteria column.
+"""
+function handle_job(
+    ::PolygonCriteriaStatsHandler,
+    input::PolygonCriteriaStatsInput,
+    context::HandlerContext
+)::PolygonCriteriaStatsOutput
+    @info "Initiating polygon criteria stats task" region = input.region criteria =
+        input.criteria
+
+    # Load (or retrieve from cache) regional data for the requested region
+    regional_data::ReefGuide.RegionalData = prepare_target_regional_data(;
+        data_path=context.data_path, region_id=input.region
+    )
+
+    region_data = regional_data.regions[input.region]
+    full_slope_table = region_data.slope_table
+    @info "Full slope table loaded" rows = nrow(full_slope_table)
+
+    # Narrow slope table to the polygon.
+    # Two-pass filter: bbox first (cheap vectorised range check), then point-in-polygon
+    # (expensive GO.within broadcast) only on the reduced candidate set.
+    poly_geom = build_geo_interface_polygon(input.polygon)
+    bbox = GeometryOps.GI.extent(poly_geom)
+    bbox_scope = ReefGuide.BBoxScope(bbox.X[1], bbox.Y[1], bbox.X[2], bbox.Y[2])
+    bbox_table = ReefGuide.apply_spatial_scope(full_slope_table, bbox_scope)
+    @info "Bbox pre-filter" bbox_rows = nrow(bbox_table)
+    poly_scope = ReefGuide.PolygonScope(poly_geom)
+    scoped_table = ReefGuide.apply_spatial_scope(bbox_table, poly_scope)
+    @info "Scoped slope table to polygon" scoped_rows = nrow(scoped_table)
+
+    # Compute stats for each requested criteria
+    stats = Dict{String,Any}()
+    for criteria_id in input.criteria
+        col_sym = Symbol(criteria_id)
+        if !hasproperty(scoped_table, col_sym)
+            @warn "Criteria column not found in slope table — skipping" criteria_id
+            continue
+        end
+
+        raw_col = scoped_table[:, col_sym]
+        # Collect finite (non-missing, non-NaN, non-Inf) values
+        valid_vals = Float64[
+            Float64(x) for x in raw_col if !ismissing(x) && isfinite(Float64(x))
+        ]
+        nodata_count = length(raw_col) - length(valid_vals)
+
+        stats[criteria_id] = _compute_criteria_stat(valid_vals, nodata_count)
+        @debug "Computed stats for criteria" criteria_id valid_count = length(valid_vals) nodata_count
+    end
+
+    computed_at = Dates.format(now(), "yyyy-mm-ddTHH:MM:SSZ")
+
+    @info "Polygon criteria stats task complete" criteria_computed = length(stats)
+    return PolygonCriteriaStatsOutput(stats, computed_at, input.criteria)
+end
 
 #
 # Register the job types when the module loads
@@ -854,6 +1016,14 @@ function __init__()
         DataSpecificationUpdateHandler(),
         DataSpecificationUpdateInput,
         DataSpecificationUpdateOutput
+    )
+
+    # Register the POLYGON_CRITERIA_STATS job handler
+    register_job_handler!(
+        POLYGON_CRITERIA_STATS,
+        PolygonCriteriaStatsHandler(),
+        PolygonCriteriaStatsInput,
+        PolygonCriteriaStatsOutput
     )
 
     @debug "Jobs module initialized with handlers"
