@@ -2,7 +2,7 @@
 # build/build.sh -- Compile ReefGuideWorker.jl into a standalone executable via juliac.
 #
 # Usage (from the ReefGuideWorker.jl root):
-#   ./build/build.sh [--output-dir <dir>]
+#   ./build/build.sh
 #
 # Mode:
 #   bundled (only mode currently supported) juliac --output-exe --bundle ->
