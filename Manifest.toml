@@ -2,7 +2,7 @@
 
 julia_version = "1.12.6"
 manifest_format = "2.0"
-project_hash = "b2fd81af9ddb7dde6549c51f93a534948c4d2ff9"
+project_hash = "9ae91df6d28a333a31ef413feb504313bd3d1d8c"
 
 [[deps.AWS]]
 deps = ["Base64", "Compat", "Dates", "Downloads", "GitHub", "HTTP", "IniFile", "JSON", "MD5", "Mocking", "OrderedCollections", "Random", "SHA", "ScopedValues", "Sockets", "URIs", "UUIDs", "XMLDict"]
@@ -1303,11 +1303,11 @@ version = "1.3.4"
 
 [[deps.ReefGuide]]
 deps = ["ArchGDAL", "Arrow", "CoordinateTransformations", "DataFrames", "Dates", "DiskArrays", "Distances", "ExtendableSparse", "GeoDataFrames", "GeoFormatTypes", "GeoInterface", "GeometryBasics", "GeometryOps", "Glob", "ImageIO", "Interpolations", "JSON3", "LibGEOS", "LinearAlgebra", "Logging", "Mmap", "NearestNeighbors", "OrderedCollections", "PrecompileSignatures", "PrecompileTools", "Proj", "Rasters", "Serialization", "SortTileRecursiveTree", "SparseArrays", "StaticArrays", "Statistics", "StructTypes", "Tables"]
-git-tree-sha1 = "a315076470c59ac5201dcd7df4d0c128cfe42139"
-repo-rev = "v0.4.0"
+git-tree-sha1 = "ae32c2fe28f68b6f1b831ba37221d2fdfa639111"
+repo-rev = "23986b0456f46369fc56478003cb2a1b136c152b"
 repo-url = "https://github.com/open-AIMS/ReefGuide.jl"
 uuid = "cee0a5fb-9790-4c4c-b8b7-e40ecbebeb72"
-version = "0.4.0"
+version = "0.3.0"
 
 [[deps.ReefGuideWorker]]
 deps = ["AWS", "AWSS3", "DataFrames", "Dates", "DotEnv", "GeometryOps", "HTTP", "JSON", "JSON3", "JSONWebTokens", "Logging", "Minio", "PrecompileSignatures", "Random", "SentryIntegration", "Serialization", "Statistics"]
