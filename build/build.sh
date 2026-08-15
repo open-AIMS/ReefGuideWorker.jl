@@ -39,10 +39,3 @@ JULIA_CC="$SCRIPT_DIR/gcc-with-lm.sh" \
 time juliac --verbose --project="$PROJECT_ROOT" --output-exe reefguide-worker \
     --bundle "$OUTPUT_DIR" --experimental "$ENTRY_FILE" \
     2>&1 | tee "$BUILD_LOG"
-
-# Remove import library (.dll.a) -- not needed for distribution
-for f in "$OUTPUT_DIR"/*.dll.a; do
-    [[ -e "$f" ]] || continue
-    rm -f "$f"
-    echo "Removed $(basename "$f")"
-done

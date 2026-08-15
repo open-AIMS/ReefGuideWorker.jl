@@ -158,8 +158,7 @@ RUN mkdir -p /out && \
     chmod +x build/gcc-with-lm.sh && \
     JULIA_CC="$(pwd)/build/gcc-with-lm.sh" \
     juliac --verbose --project="${PRJ_PATH}" --output-exe reefguide-worker \
-    --bundle /out --experimental build/worker_main.jl && \
-    rm -f /out/*.dll.a
+    --bundle /out --experimental build/worker_main.jl
 
 #------------------------------------------------------------------------------
 # app-juliac build target: runs the juliac-compiled standalone executable
@@ -170,13 +169,14 @@ RUN mkdir -p /out && \
 # Deliberately FROM debian:bookworm-slim rather than internal-base/app-src:
 # the whole point of --bundle is that the target no longer needs a Julia
 # install/depot, so basing this on the Julia image would defeat the size
-# win. The gdal-bin/libfftw3-dev/openssl/ca-certificates subset below is
+# win. The gdal-bin/libfftw3-double3/openssl/ca-certificates subset below is
 # intentionally re-declared (not reused from internal-base) for that
 # reason - keep it in sync by hand if internal-base's list changes. Unlike
-# internal-base, this stage deliberately omits libgdal-dev: the compiled
-# executable only needs GDAL's runtime shared library (pulled in as a
-# dependency of gdal-bin), not the dev headers/static libs internal-base
-# needs for building/precompiling against GDAL.
+# internal-base, this stage deliberately omits the -dev packages
+# (libgdal-dev, libfftw3-dev): the compiled executable only needs GDAL/FFTW's
+# runtime shared libraries (gdal-bin/libfftw3-double3), not the dev
+# headers/static libs internal-base needs for building/precompiling against
+# them.
 #------------------------------------------------------------------------------
 FROM debian:bookworm-slim AS app-juliac
 
@@ -186,7 +186,7 @@ RUN --mount=target=/var/lib/apt/lists,type=cache,sharing=locked \
     && apt-get -y upgrade \
     && apt-get install --no-install-recommends -y \
     gdal-bin \
-    libfftw3-dev \
+    libfftw3-double3 \
     openssl \
     ca-certificates \
     && apt-get clean \
