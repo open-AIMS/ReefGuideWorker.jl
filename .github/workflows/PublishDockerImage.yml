@@ -8,6 +8,11 @@ name: Build and Publish ReefGuideWorker.jl Docker Image
 
 on:
   workflow_dispatch:
+    inputs:
+      build_juliac:
+        description: "Also build+push the juliac-compiled (app-juliac target) image, tagged with a '-juliac' suffix"
+        type: boolean
+        default: false
   release:
     types: [published]
 
@@ -65,5 +70,56 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }} # Uses the tags generated in the metadata step
           labels: ${{ steps.meta.outputs.labels }} # Uses the labels generated in the metadata step
           # Passes the Julia versions to the Dockerfile
+          build-args: |
+            JULIA_VERSION=${{ env.JULIA_VERSION }}
+
+  # Builds the juliac-compiled (app-juliac Dockerfile target) standalone
+  # executable image, A/B-testable against app-src via a separate imageTag
+  # + juliac:true in the deploy config (see infraConfig.ts / infra.ts).
+  # Manual-only for now (workflow_dispatch input) -- this build path is
+  # still Phase 1 / unverified in AWS, not yet coupled to releases.
+  build-and-push-juliac-image:
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.build_juliac }}
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          flavor: |
+            suffix=-juliac,onlatest=true
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}.{{minor}}.{{patch}}
+            type=semver,pattern={{major}}
+            type=ref,event=branch
+            type=sha,format=long
+            type=sha,format=short
+            type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', 'main') }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: app-juliac # Compiled standalone executable target
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             JULIA_VERSION=${{ env.JULIA_VERSION }}

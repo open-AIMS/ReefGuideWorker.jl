@@ -109,3 +109,94 @@ ENTRYPOINT ["julia", "--project=@app", "-e"]
 
 # Derived applications should override the command e.g. to start
 CMD ["using ReefGuideWorker; ReefGuideWorker.start_worker()"]
+
+#------------------------------------------------------------------------------
+# app-juliac-builder build target: compiles ReefGuideWorker.jl into a
+# standalone executable via `juliac --bundle` (no --trim). See
+# build/build.sh and .claude/plans/ReefGuide-compilation.md §5.2. Reuses
+# app-src's already-precompiled @app environment rather than reinstantiating.
+#------------------------------------------------------------------------------
+FROM app-src AS app-juliac-builder
+
+# JuliaC's link step shells out to `gcc`/`clang`, neither of which
+# internal-base installs (it's not needed to just run Julia). Only this
+# builder stage needs it -- app-src ships as its own image target and
+# app-juliac's final runtime stage is deliberately not based on this one.
+RUN --mount=target=/var/lib/apt/lists,type=cache,sharing=locked \
+    --mount=target=/var/cache/apt,type=cache,sharing=locked \
+    apt-get update \
+    && apt-get install --no-install-recommends -y gcc
+
+# The `juliac` on PATH in the base julia image is just the bare
+# contrib/juliac.jl script shipped with Julia, which has neither --bundle
+# nor --project support. The CLI our build/build.sh relies on (mirroring
+# Kora.jl/build/build.sh) is actually provided by the separate `JuliaC`
+# package (https://github.com/JuliaLang/JuliaC.jl, registered in General),
+# installed as a Julia 1.12 Pkg App. Install it here and put its shim on
+# PATH, overriding the stdlib script of the same name.
+RUN julia -e 'using Pkg; Pkg.Apps.add("JuliaC")'
+ENV PATH="${JULIA_DEPOT_PATH}/bin:${PATH}"
+
+COPY build/ build/
+
+# Same JULIA_CPU_TARGET as internal-base, so the compiled executable is
+# portable across the deployed x86_64 microarchitectures, not just the
+# build host's.
+# --project must be an actual directory/Project.toml path here, not the
+# `@app` named-environment shorthand: JuliaC's own --project parsing (unlike
+# plain `julia --project=@app`) does not resolve `@app` and will fail trying
+# to readdir("") if given it verbatim.
+#
+# JuliaC only adds -lm on i686; on x86_64, floorf becomes a libcall to libm
+# and the link fails with "undefined reference to floorf@@GLIBC" /
+# "DSO missing from command line" (see linking.jl's get_compiler_cmd). Wrap
+# the compiler via JULIA_CC to inject -lm unconditionally -- same workaround
+# already verified in Kora.jl/build/build.sh's `worker` mode.
+RUN mkdir -p /out && \
+    printf '#!/bin/sh\nexec gcc "$@" -lm\n' > /usr/local/bin/gcc-with-lm && \
+    chmod +x /usr/local/bin/gcc-with-lm && \
+    JULIA_CC=/usr/local/bin/gcc-with-lm \
+    juliac --verbose --project="${PRJ_PATH}" --output-exe reefguide-worker \
+    --bundle /out --experimental build/worker_main.jl && \
+    rm -f /out/*.dll.a
+
+#------------------------------------------------------------------------------
+# app-juliac build target: runs the juliac-compiled standalone executable
+# directly, no `julia --project=@app -e ...` and no Julia depot/install on
+# the target. A/B-tested against app-src via a separate imageTag
+# (see infraConfig.ts JuliacConfigurationSchema / infra.ts).
+#
+# Deliberately FROM debian:bookworm-slim rather than internal-base/app-src:
+# the whole point of --bundle is that the target no longer needs a Julia
+# install/depot, so basing this on the Julia image would defeat the size
+# win. The gdal-bin/libgdal-dev/libfftw3-dev/openssl/ca-certificates subset
+# below is intentionally re-declared (not reused from internal-base) for
+# that reason - keep it in sync by hand if internal-base's list changes.
+#------------------------------------------------------------------------------
+FROM debian:bookworm-slim AS app-juliac
+
+RUN --mount=target=/var/lib/apt/lists,type=cache,sharing=locked \
+    --mount=target=/var/cache/apt,type=cache,sharing=locked \
+    apt-get update \
+    && apt-get -y upgrade \
+    && apt-get install --no-install-recommends -y \
+    gdal-bin \
+    libgdal-dev \
+    libfftw3-dev \
+    openssl \
+    ca-certificates \
+    && apt-get clean \
+    && apt-get autoremove --purge \
+    && rm -rf /var/lib/apt/lists/*
+
+# Expect to include the prepped data at /data/app and the config at
+# /data/.config.toml, same as app-src.
+VOLUME ["/data/app"]
+
+# See app-src's JULIA_NUM_THREADS comment: same reasoning applies to the
+# compiled executable's thread pool.
+ENV JULIA_NUM_THREADS="4,1"
+
+COPY --from=app-juliac-builder /out /opt/reefguide-worker
+
+ENTRYPOINT ["/opt/reefguide-worker/bin/reefguide-worker"]
