@@ -137,7 +137,12 @@ RUN --mount=target=/var/lib/apt/lists,type=cache,sharing=locked \
 RUN julia -e 'using Pkg; Pkg.Apps.add("JuliaC")'
 ENV PATH="${JULIA_DEPOT_PATH}/bin:${PATH}"
 
-COPY build/ build/
+# Only what juliac actually needs -- build.sh/push.sh are for local dev/CI
+# invocation, not used inside this stage (which reimplements the juliac
+# invocation directly, so it can reuse app-src's already-precompiled @app
+# environment rather than shelling out to build.sh's own path resolution).
+COPY build/worker_main.jl build/worker_main.jl
+COPY build/gcc-with-lm.sh build/gcc-with-lm.sh
 
 # Same JULIA_CPU_TARGET as internal-base, so the compiled executable is
 # portable across the deployed x86_64 microarchitectures, not just the
@@ -147,15 +152,11 @@ COPY build/ build/
 # plain `julia --project=@app`) does not resolve `@app` and will fail trying
 # to readdir("") if given it verbatim.
 #
-# JuliaC only adds -lm on i686; on x86_64, floorf becomes a libcall to libm
-# and the link fails with "undefined reference to floorf@@GLIBC" /
-# "DSO missing from command line" (see linking.jl's get_compiler_cmd). Wrap
-# the compiler via JULIA_CC to inject -lm unconditionally -- same workaround
-# already verified in Kora.jl/build/build.sh's `worker` mode.
+# See build/gcc-with-lm.sh for why JULIA_CC needs to inject -lm here --
+# shared with build.sh's identical local-dev invocation.
 RUN mkdir -p /out && \
-    printf '#!/bin/sh\nexec gcc "$@" -lm\n' > /usr/local/bin/gcc-with-lm && \
-    chmod +x /usr/local/bin/gcc-with-lm && \
-    JULIA_CC=/usr/local/bin/gcc-with-lm \
+    chmod +x build/gcc-with-lm.sh && \
+    JULIA_CC="$(pwd)/build/gcc-with-lm.sh" \
     juliac --verbose --project="${PRJ_PATH}" --output-exe reefguide-worker \
     --bundle /out --experimental build/worker_main.jl && \
     rm -f /out/*.dll.a

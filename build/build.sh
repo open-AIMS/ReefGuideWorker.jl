@@ -33,16 +33,9 @@ BUILD_LOG="$OUTPUT_DIR/build.log"
 echo "Mode: bundled (libjulia, stdlibs, and artifacts bundled via --bundle, no --trim)"
 echo "Build log: $BUILD_LOG"
 
-# JuliaC only adds -lm on i686; on x86_64, floorf becomes a libcall to libm
-# and the link fails ("undefined reference to floorf@@GLIBC" / "DSO missing
-# from command line"). Wrap the compiler via JULIA_CC to inject -lm
-# unconditionally -- same workaround already verified in
-# Kora.jl/build/build.sh's `worker` mode.
-_GCC_WRAPPER="$(mktemp /tmp/gcc-wrapper-XXXXXX.sh)"
-trap 'rm -f "$_GCC_WRAPPER"' EXIT
-printf '#!/bin/sh\nexec gcc "$@" -lm\n' > "$_GCC_WRAPPER"
-chmod +x "$_GCC_WRAPPER"
-JULIA_CC="$_GCC_WRAPPER" \
+# See gcc-with-lm.sh for why this wrapper is needed (shared with the
+# Dockerfile's app-juliac-builder stage via the same JULIA_CC mechanism).
+JULIA_CC="$SCRIPT_DIR/gcc-with-lm.sh" \
 time juliac --verbose --project="$PROJECT_ROOT" --output-exe reefguide-worker \
     --bundle "$OUTPUT_DIR" --experimental "$ENTRY_FILE" \
     2>&1 | tee "$BUILD_LOG"
