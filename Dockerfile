@@ -169,9 +169,13 @@ RUN mkdir -p /out && \
 # Deliberately FROM debian:bookworm-slim rather than internal-base/app-src:
 # the whole point of --bundle is that the target no longer needs a Julia
 # install/depot, so basing this on the Julia image would defeat the size
-# win. The gdal-bin/libgdal-dev/libfftw3-dev/openssl/ca-certificates subset
-# below is intentionally re-declared (not reused from internal-base) for
-# that reason - keep it in sync by hand if internal-base's list changes.
+# win. The gdal-bin/libfftw3-dev/openssl/ca-certificates subset below is
+# intentionally re-declared (not reused from internal-base) for that
+# reason - keep it in sync by hand if internal-base's list changes. Unlike
+# internal-base, this stage deliberately omits libgdal-dev: the compiled
+# executable only needs GDAL's runtime shared library (pulled in as a
+# dependency of gdal-bin), not the dev headers/static libs internal-base
+# needs for building/precompiling against GDAL.
 #------------------------------------------------------------------------------
 FROM debian:bookworm-slim AS app-juliac
 
@@ -181,7 +185,6 @@ RUN --mount=target=/var/lib/apt/lists,type=cache,sharing=locked \
     && apt-get -y upgrade \
     && apt-get install --no-install-recommends -y \
     gdal-bin \
-    libgdal-dev \
     libfftw3-dev \
     openssl \
     ca-certificates \

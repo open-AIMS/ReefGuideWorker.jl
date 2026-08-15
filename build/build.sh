@@ -39,13 +39,13 @@ echo "Build log: $BUILD_LOG"
 # unconditionally -- same workaround already verified in
 # Kora.jl/build/build.sh's `worker` mode.
 _GCC_WRAPPER="$(mktemp /tmp/gcc-wrapper-XXXXXX.sh)"
+trap 'rm -f "$_GCC_WRAPPER"' EXIT
 printf '#!/bin/sh\nexec gcc "$@" -lm\n' > "$_GCC_WRAPPER"
 chmod +x "$_GCC_WRAPPER"
 JULIA_CC="$_GCC_WRAPPER" \
 time juliac --verbose --project="$PROJECT_ROOT" --output-exe reefguide-worker \
     --bundle "$OUTPUT_DIR" --experimental "$ENTRY_FILE" \
     2>&1 | tee "$BUILD_LOG"
-rm -f "$_GCC_WRAPPER"
 
 # Remove import library (.dll.a) -- not needed for distribution
 for f in "$OUTPUT_DIR"/*.dll.a; do
