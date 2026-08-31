@@ -122,10 +122,14 @@ function login!(client::AuthApiClient)
             throw(ApiError("Login failed", response.status, String(response.body)))
         end
     catch e
-        if e isa HTTP.ExceptionRequest.StatusError
+        if e isa HTTPStatusError
             throw(ApiError("Failed to login", e.status, String(e.response.body)))
         else
-            throw(ApiError("Failed to login", 500, nothing))
+            # Connection refused, DNS failure, TLS error, timeout, etc. Keep the cause in
+            # the message — otherwise a transport failure is indistinguishable from a real
+            # HTTP 500 in the logs.
+            @warn "Login failed with a non-HTTP error" exception = (e, catch_backtrace())
+            throw(ApiError("Failed to login: $(e)", 500, nothing))
         end
     end
 end
