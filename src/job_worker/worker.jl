@@ -322,6 +322,19 @@ function run_worker_loop(worker::WorkerService)
                 sleep(worker.config.poll_interval_ms / 1000)
             end
         catch exc
+            # Auth won't recover on its own (e.g. a stale WORKER_PASSWORD): stop cleanly so
+            # ECS / the capacity manager respawns a fresh worker on demand.
+            if exc isa LoginGaveUpError
+                @error "Stopping worker: $(exc.message)"
+                if !isnothing(worker.config.sentry_dsn)
+                    SentryIntegration.capture_exception(
+                        ErrorException("Worker giving up: $(exc.message)")
+                    )
+                end
+                worker.is_running = false
+                break
+            end
+
             @error "Error in worker loop: $exc" exception = (exc, catch_backtrace())
 
             # Report to sentry, if configured
@@ -408,6 +421,9 @@ function poll_for_job(worker::WorkerService)::Union{Job,Nothing}
         @debug "No suitable jobs found among $(length(jobs)) available jobs"
         return nothing
     catch e
+        # Authentication is not going to recover on its own — let the loop shut us down
+        # rather than swallowing it and polling forever.
+        e isa LoginGaveUpError && rethrow(e)
         @error "Error polling for jobs: $e" exception = (e, catch_backtrace())
         return nothing
     end
