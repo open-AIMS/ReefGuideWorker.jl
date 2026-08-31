@@ -1,6 +1,7 @@
 using ReefGuideWorker
 using ReefGuide
 using DataFrames
+using Dates
 using GeometryOps
 using JSON3
 using Test
@@ -172,16 +173,60 @@ end
     @test (GeometryOps.GI.x(points[1]), GeometryOps.GI.y(points[1])) == (1.0, 2.0)
 end
 
-@testset "build_spatial_scope - blocked on unreleased ReefGuide.jl scope support" begin
-    # `ReefGuide.BBoxScope`/`ReefGuide.PolygonScope` are new in an unreleased
-    # ReefGuide.jl (Project.toml compat is bumped to 0.2.0, but Manifest.toml
-    # is still pinned to the last registered 0.1.12 pending registration -
-    # see the "Bump ReefGuide compat to 0.2.0" commit). Calling
-    # `build_spatial_scope` currently throws `UndefVarError` at runtime as a
-    # result. This test documents that expected-for-now failure; once
-    # ReefGuide.jl ships the scope support and Manifest.toml is re-resolved,
-    # replace this with a real assertion that `build_spatial_scope` returns
-    # a `ReefGuide.BBoxScope`/`ReefGuide.PolygonScope`.
-    scope = ReefGuideWorker.BBoxScopeInput("bbox", (1.0, 2.0, 3.0, 4.0))
-    @test_throws UndefVarError ReefGuideWorker.build_spatial_scope(scope)
+@testset "build_spatial_scope" begin
+    # `ReefGuide.BBoxScope`/`ReefGuide.PolygonScope` arrived in the registered
+    # ReefGuide.jl 0.3.0; before that `build_spatial_scope` threw `UndefVarError`.
+    bbox = ReefGuideWorker.build_spatial_scope(
+        ReefGuideWorker.BBoxScopeInput("bbox", (1.0, 2.0, 3.0, 4.0))
+    )
+    @test bbox isa ReefGuide.BBoxScope
+
+    polygon = ReefGuideWorker.build_spatial_scope(
+        ReefGuideWorker.PolygonScopeInput(
+            "polygon",
+            ReefGuideWorker.GeoJSONPolygonInput(
+                "Polygon", [[[1.0, 2.0], [3.0, 4.0], [5.0, 6.0], [1.0, 2.0]]]
+            )
+        )
+    )
+    @test polygon isa ReefGuide.PolygonScope
+end
+
+@testset "login backoff / circuit breaker" begin
+    creds = ReefGuideWorker.Credentials("worker@example.com", "pw")
+    mkclient() = ReefGuideWorker.AuthApiClient("http://localhost:9/api", creds)
+
+    # A single failure advances the counter and arms a future retry window.
+    c = mkclient()
+    ReefGuideWorker._login_failed!(c, "HTTP 401")
+    @test c.consecutive_login_failures == 1
+    @test c.login_retry_after isa DateTime
+
+    # While the window is open, `login!` fails fast with a 429 ApiError, no network call.
+    c.login_retry_after = Dates.now(Dates.UTC) + Dates.Minute(5)
+    err = try
+        ReefGuideWorker.login!(c)
+        nothing
+    catch e
+        e
+    end
+    @test err isa ReefGuideWorker.ApiError
+    @test err.status_code == 429
+
+    # A success closes the breaker.
+    ReefGuideWorker._login_succeeded!(c)
+    @test c.consecutive_login_failures == 0
+    @test isnothing(c.login_retry_after)
+
+    # After LOGIN_MAX_CONSECUTIVE_FAILURES failures in a row, give up with LoginGaveUpError
+    # rather than backing off forever.
+    c2 = mkclient()
+    lim = ReefGuideWorker.LOGIN_MAX_CONSECUTIVE_FAILURES
+    for _ in 1:(lim - 1)
+        ReefGuideWorker._login_failed!(c2, "HTTP 429")
+    end
+    @test c2.consecutive_login_failures == lim - 1
+    @test_throws ReefGuideWorker.LoginGaveUpError ReefGuideWorker._login_failed!(
+        c2, "HTTP 429"
+    )
 end

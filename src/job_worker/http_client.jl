@@ -16,6 +16,25 @@ struct ApiError <: Exception
     )
 end
 
+# Login backoff / circuit breaker. Without this a worker with a stale `WORKER_PASSWORD` (or a
+# rate-limited / down API) retries `login!` every poll interval (~2 s) forever, turning one bad
+# worker into a self-inflicted `/auth/login` 429 storm. Each consecutive failure pushes the next
+# attempt out exponentially (full jitter, capped); after `LOGIN_MAX_CONSECUTIVE_FAILURES` the
+# worker raises `LoginGaveUpError` and stops, to be respawned on demand by the capacity manager.
+const LOGIN_BACKOFF_BASE_S = 2.0
+const LOGIN_BACKOFF_CAP_S = 300.0
+const LOGIN_MAX_CONSECUTIVE_FAILURES = 10
+
+"""
+Raised when `login!` has failed `LOGIN_MAX_CONSECUTIVE_FAILURES` times in a row: authentication
+will not recover on its own, so the worker loop should stop.
+"""
+struct LoginGaveUpError <: Exception
+    message::String
+end
+
+Base.showerror(io::IO, e::LoginGaveUpError) = print(io, "LoginGaveUpError: $(e.message)")
+
 """
 Represents JWT payload structure
 
@@ -53,6 +72,10 @@ mutable struct AuthApiClient
     tokens::Union{AuthTokens,Nothing}
     http_headers::Dict{String,String}
     token_refresh_threshold_ms::Int
+    "Number of consecutive `login!` failures since the last success (circuit-breaker state)"
+    consecutive_login_failures::Int
+    "Earliest UTC time the next `login!` attempt is permitted, or `nothing` when not backing off"
+    login_retry_after::Union{DateTime,Nothing}
 
     function AuthApiClient(base_url::String, credentials::Credentials)
         return new(
@@ -60,7 +83,9 @@ mutable struct AuthApiClient
             credentials,
             nothing,
             Dict("Content-Type" => "application/json"),
-            60  # 1 minute in seconds
+            60,  # 1 minute in seconds
+            0,
+            nothing
         )
     end
 end
@@ -97,9 +122,52 @@ function get_valid_token(client::AuthApiClient)::Union{String,Nothing}
 end
 
 """
+Record a successful login: close the circuit breaker.
+"""
+function _login_succeeded!(client::AuthApiClient)
+    client.consecutive_login_failures = 0
+    client.login_retry_after = nothing
+    return nothing
+end
+
+"""
+Record a failed login: advance the circuit breaker and schedule the next permitted attempt
+with exponential backoff + full jitter. Throws `LoginGaveUpError` once the consecutive
+failure count reaches `LOGIN_MAX_CONSECUTIVE_FAILURES`.
+"""
+function _login_failed!(client::AuthApiClient, cause)
+    client.consecutive_login_failures += 1
+    n = client.consecutive_login_failures
+
+    # Arm the window before the give-up check so a stray retry still short-circuits.
+    window_s = min(LOGIN_BACKOFF_CAP_S, LOGIN_BACKOFF_BASE_S * 2.0^(n - 1))
+    delay_s = rand() * window_s  # full jitter
+    client.login_retry_after =
+        Dates.now(Dates.UTC) + Dates.Millisecond(round(Int, delay_s * 1000))
+
+    if n >= LOGIN_MAX_CONSECUTIVE_FAILURES
+        throw(LoginGaveUpError("$(n) consecutive login failures, last cause: $(cause)"))
+    end
+
+    @warn "login! failed; backing off" consecutive_failures = n limit =
+        LOGIN_MAX_CONSECUTIVE_FAILURES retry_in_s = round(delay_s; digits=1) cause
+    return nothing
+end
+
+"""
 Login to get new tokens
 """
 function login!(client::AuthApiClient)
+    # Circuit breaker: while a prior failure's backoff window is still open, fail fast
+    # without touching the network.
+    if !isnothing(client.login_retry_after)
+        remaining_s = Dates.value(client.login_retry_after - Dates.now(Dates.UTC)) / 1000
+        if remaining_s > 0
+            msg = "Login backoff active, $(round(remaining_s; digits=1))s remaining"
+            throw(ApiError(msg, 429, nothing))
+        end
+    end
+
     try
         response = HTTP.post(
             "$(client.base_url)/auth/login",
@@ -118,16 +186,24 @@ function login!(client::AuthApiClient)
                 response_data.token,
                 haskey(response_data, :refreshToken) ? response_data.refreshToken : nothing
             )
+            _login_succeeded!(client)
         else
+            _login_failed!(client, "HTTP $(response.status)")
             throw(ApiError("Login failed", response.status, String(response.body)))
         end
     catch e
+        # `ApiError` (non-200 branch above) and `LoginGaveUpError` (from `_login_failed!`) have
+        # already been counted — propagate them without recording another failure.
+        (e isa ApiError || e isa LoginGaveUpError) && rethrow(e)
+
         if e isa HTTPStatusError
+            _login_failed!(client, "HTTP $(e.status)")
             throw(ApiError("Failed to login", e.status, String(e.response.body)))
         else
             # Connection refused, DNS failure, TLS error, timeout, etc. Keep the cause in
             # the message — otherwise a transport failure is indistinguishable from a real
             # HTTP 500 in the logs.
+            _login_failed!(client, e)
             @warn "Login failed with a non-HTTP error" exception = (e, catch_backtrace())
             throw(ApiError("Failed to login: $(e)", 500, nothing))
         end
