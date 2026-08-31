@@ -118,10 +118,12 @@ function process(::TypedJobHandler, context::JobContext)
         # Extract job type from the job
         job_type_str = context.job.type
 
-        # Convert string to JobType enum (safely)
-        job_type = symbol_to_job_type[Symbol(job_type_str)]
+        # Convert string to JobType enum (safely). `get` with a `nothing` default so an
+        # unrecognised type returns a clean failure instead of throwing `KeyError` into
+        # the outer catch below.
+        job_type = get(symbol_to_job_type, Symbol(job_type_str), nothing)
         if isnothing(job_type)
-            @error "Unknown job type: $job_type_str" exception = (e, catch_backtrace())
+            @error "Unknown job type: $job_type_str"
             return (false, nothing)
         end
 

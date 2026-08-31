@@ -88,7 +88,7 @@ function get_task_metadata()::TaskIdentifiers
             task_metadata.AvailabilityZone
         )
     catch e
-        if e isa HTTP.ExceptionRequest.StatusError
+        if e isa HTTPStatusError
             throw(ErrorException("Failed to retrieve ECS task metadata: $(e.status)"))
         else
             throw(ErrorException("Failed to retrieve ECS task metadata"))
