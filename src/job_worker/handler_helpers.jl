@@ -9,8 +9,9 @@ Build regional assessment parameters from user input and regional data.
 
 Creates a parameter set for regional assessment by merging user-specified
 criteria bounds with regional defaults. Validates that the specified region
- and specified criteria exists. At least one parameter for a criteria must
- be specified (min|max) for it to be considered.
+exists. At least one parameter for a criteria must be specified (min|max) for
+it to be considered; a specified criterion the region has no data for is
+skipped with a warning rather than failing the job.
 
 # Arguments
 - `input::RegionalAssessmentInput` : User input containing assessment parameters
@@ -21,7 +22,6 @@ criteria bounds with regional defaults. Validates that the specified region
 
 # Throws
 - `ErrorException` : If specified region is not found in regional data
-- `ErrorException` : If criteria data is missing or bounds calculation fails.
 """
 function build_regional_assessment_parameters(
     input::RegionalAssessmentInput,
@@ -56,7 +56,12 @@ function build_regional_assessment_parameters(
 
         bounds = get(regional_bounds, criteria_id, nothing)
         if isnothing(bounds)
-            throw(ErrorException("$(criteria_id) criteria missing in region_data.criteria"))
+            # The region has no data for this criterion (e.g. a layer with no coverage
+            # was dropped from the bounds sidecar), so there is nothing to filter on -
+            # skip the user's bound for it rather than failing the whole job.
+            @warn "Ignoring user-specified criteria with no data in this region" criteria_id region =
+                input.region
+            continue
         end
 
         merged = merge_bounds(
