@@ -35,6 +35,14 @@ struct UpdateCriteriaInput
     default_min_val::Float32
     "Default maximum value users typically select"
     default_max_val::Float32
+    "MCDA preference direction default (Phase B); mirrored from ReefGuide.jl ASSESSMENT_CRITERIA"
+    default_direction::OptionalValue{String}
+    "MCDA band-peak default (Phase B); set only when the criterion's direction is `band`"
+    default_band_peak::OptionalValue{Float64}
+    "MCDA missing-data weight default (Phase B), on the [0,1] score scale"
+    default_missing_weight::OptionalValue{Float64}
+    "MCDA aggregate weight default (Phase B)"
+    default_weight::OptionalValue{Float64}
 
     # Kwarg constructor
     function UpdateCriteriaInput(;
@@ -48,7 +56,11 @@ struct UpdateCriteriaInput
         min_val::Number,
         max_val::Number,
         default_min_val::Number,
-        default_max_val::Number
+        default_max_val::Number,
+        default_direction::OptionalValue{String}=nothing,
+        default_band_peak::Union{Real,Nothing}=nothing,
+        default_missing_weight::Union{Real,Nothing}=nothing,
+        default_weight::Union{Real,Nothing}=nothing
     )
         return new(
             name,
@@ -61,7 +73,11 @@ struct UpdateCriteriaInput
             Float32(min_val),
             Float32(max_val),
             Float32(default_min_val),
-            Float32(default_max_val)
+            Float32(default_max_val),
+            default_direction,
+            isnothing(default_band_peak) ? nothing : Float64(default_band_peak),
+            isnothing(default_missing_weight) ? nothing : Float64(default_missing_weight),
+            isnothing(default_weight) ? nothing : Float64(default_weight)
         )
     end
 end

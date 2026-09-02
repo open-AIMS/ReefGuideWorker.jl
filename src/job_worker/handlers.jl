@@ -266,6 +266,41 @@ struct RegionalAssessmentInput <: AbstractJobInput
     waves_height_max::OptionalValue{Float64}
     waves_period_min::OptionalValue{Float64}
     waves_period_max::OptionalValue{Float64}
+    # MCDA scoring config (Phase B). All optional; a nothing falls back to the
+    # criterion's stored default when parameters are built. Kept as one trailing
+    # block so the positional constructor calls in handler_helpers.jl stay legible.
+    depth_direction::OptionalValue{String}
+    depth_band_peak::OptionalValue{Float64}
+    depth_missing_weight::OptionalValue{Float64}
+    depth_weight::OptionalValue{Float64}
+    high_tide_direction::OptionalValue{String}
+    high_tide_band_peak::OptionalValue{Float64}
+    high_tide_missing_weight::OptionalValue{Float64}
+    high_tide_weight::OptionalValue{Float64}
+    low_tide_direction::OptionalValue{String}
+    low_tide_band_peak::OptionalValue{Float64}
+    low_tide_missing_weight::OptionalValue{Float64}
+    low_tide_weight::OptionalValue{Float64}
+    rugosity_direction::OptionalValue{String}
+    rugosity_band_peak::OptionalValue{Float64}
+    rugosity_missing_weight::OptionalValue{Float64}
+    rugosity_weight::OptionalValue{Float64}
+    slope_direction::OptionalValue{String}
+    slope_band_peak::OptionalValue{Float64}
+    slope_missing_weight::OptionalValue{Float64}
+    slope_weight::OptionalValue{Float64}
+    turbidity_direction::OptionalValue{String}
+    turbidity_band_peak::OptionalValue{Float64}
+    turbidity_missing_weight::OptionalValue{Float64}
+    turbidity_weight::OptionalValue{Float64}
+    waves_height_direction::OptionalValue{String}
+    waves_height_band_peak::OptionalValue{Float64}
+    waves_height_missing_weight::OptionalValue{Float64}
+    waves_height_weight::OptionalValue{Float64}
+    waves_period_direction::OptionalValue{String}
+    waves_period_band_peak::OptionalValue{Float64}
+    waves_period_missing_weight::OptionalValue{Float64}
+    waves_period_weight::OptionalValue{Float64}
 end
 
 """
@@ -273,6 +308,8 @@ Output payload for REGIONAL_ASSESSMENT job
 """
 struct RegionalAssessmentOutput <: AbstractJobOutput
     cog_path::String
+    "Relative path of the continuous MCDA suitability score COG (Phase B)."
+    score_cog_path::String
 end
 
 """
@@ -306,6 +343,11 @@ function handle_job(
     regional_assessment_filename = build_regional_assessment_file_path(
         params; ext="tiff", cache_path=context.cache_path
     )
+    # Continuous MCDA suitability score band (Phase B) - a sibling COG built from
+    # the same params; does not drive pixel selection.
+    score_assessment_filename = build_regional_assessment_file_path(
+        params; ext="tiff", cache_path=context.cache_path, infix="_score"
+    )
     @debug "COG File name: $(regional_assessment_filename)"
 
     if !isfile(regional_assessment_filename)
@@ -323,21 +365,37 @@ function handle_job(
         @info "Cache hit - skipping regional assessment process and re-uploading to output!"
     end
 
+    if !isfile(score_assessment_filename)
+        @debug "$(now()) : Scoring region $(params.region) (MCDA suitability band)"
+        scored = ReefGuide.assess_region_score(params)
+        @debug "$(now()) : Writing COG of MCDA score to $(score_assessment_filename)"
+        ReefGuide._write_cog(
+            score_assessment_filename, scored; tile_size=(256,), num_threads=4
+        )
+        @debug "$(now()) : Finished writing score cog "
+    else
+        @info "Cache hit - skipping MCDA score band and re-uploading to output!"
+    end
+
     # Now upload this to s3
     client = S3StorageClient(; region=context.aws_region, s3_endpoint=context.s3_endpoint)
 
     # Output file names
     output_file_name_rel = "regional_assessment.tiff"
     full_s3_target = "$(context.storage_uri)/$(output_file_name_rel)"
+    score_file_name_rel = "regional_assessment_score.tiff"
+    score_s3_target = "$(context.storage_uri)/$(score_file_name_rel)"
     @debug "File paths:" relative = output_file_name_rel absolute = full_s3_target
 
     @debug "$(now()) : Initiating file upload"
     upload_file(client, regional_assessment_filename, full_s3_target)
+    upload_file(client, score_assessment_filename, score_s3_target)
     @debug "$(now()) : File upload completed"
 
     @debug "Finished regional assessment job."
     return RegionalAssessmentOutput(
-        output_file_name_rel
+        output_file_name_rel,
+        score_file_name_rel
     )
 end
 
@@ -376,6 +434,39 @@ struct SuitabilityAssessmentInput <: AbstractJobInput
     waves_height_max::OptionalValue{Float64}
     waves_period_min::OptionalValue{Float64}
     waves_period_max::OptionalValue{Float64}
+    # MCDA scoring config (Phase B) - see RegionalAssessmentInput for the rationale.
+    depth_direction::OptionalValue{String}
+    depth_band_peak::OptionalValue{Float64}
+    depth_missing_weight::OptionalValue{Float64}
+    depth_weight::OptionalValue{Float64}
+    high_tide_direction::OptionalValue{String}
+    high_tide_band_peak::OptionalValue{Float64}
+    high_tide_missing_weight::OptionalValue{Float64}
+    high_tide_weight::OptionalValue{Float64}
+    low_tide_direction::OptionalValue{String}
+    low_tide_band_peak::OptionalValue{Float64}
+    low_tide_missing_weight::OptionalValue{Float64}
+    low_tide_weight::OptionalValue{Float64}
+    rugosity_direction::OptionalValue{String}
+    rugosity_band_peak::OptionalValue{Float64}
+    rugosity_missing_weight::OptionalValue{Float64}
+    rugosity_weight::OptionalValue{Float64}
+    slope_direction::OptionalValue{String}
+    slope_band_peak::OptionalValue{Float64}
+    slope_missing_weight::OptionalValue{Float64}
+    slope_weight::OptionalValue{Float64}
+    turbidity_direction::OptionalValue{String}
+    turbidity_band_peak::OptionalValue{Float64}
+    turbidity_missing_weight::OptionalValue{Float64}
+    turbidity_weight::OptionalValue{Float64}
+    waves_height_direction::OptionalValue{String}
+    waves_height_band_peak::OptionalValue{Float64}
+    waves_height_missing_weight::OptionalValue{Float64}
+    waves_height_weight::OptionalValue{Float64}
+    waves_period_direction::OptionalValue{String}
+    waves_period_band_peak::OptionalValue{Float64}
+    waves_period_missing_weight::OptionalValue{Float64}
+    waves_period_weight::OptionalValue{Float64}
     # Unique to suitability assessment
     threshold::OptionalValue{Int64}
     "Length dimension of target polygon"
@@ -544,6 +635,39 @@ struct FastRegionalAssessmentInput <: AbstractJobInput
     waves_height_max::OptionalValue{Float64}
     waves_period_min::OptionalValue{Float64}
     waves_period_max::OptionalValue{Float64}
+    # MCDA scoring config (Phase B) - see RegionalAssessmentInput for the rationale.
+    depth_direction::OptionalValue{String}
+    depth_band_peak::OptionalValue{Float64}
+    depth_missing_weight::OptionalValue{Float64}
+    depth_weight::OptionalValue{Float64}
+    high_tide_direction::OptionalValue{String}
+    high_tide_band_peak::OptionalValue{Float64}
+    high_tide_missing_weight::OptionalValue{Float64}
+    high_tide_weight::OptionalValue{Float64}
+    low_tide_direction::OptionalValue{String}
+    low_tide_band_peak::OptionalValue{Float64}
+    low_tide_missing_weight::OptionalValue{Float64}
+    low_tide_weight::OptionalValue{Float64}
+    rugosity_direction::OptionalValue{String}
+    rugosity_band_peak::OptionalValue{Float64}
+    rugosity_missing_weight::OptionalValue{Float64}
+    rugosity_weight::OptionalValue{Float64}
+    slope_direction::OptionalValue{String}
+    slope_band_peak::OptionalValue{Float64}
+    slope_missing_weight::OptionalValue{Float64}
+    slope_weight::OptionalValue{Float64}
+    turbidity_direction::OptionalValue{String}
+    turbidity_band_peak::OptionalValue{Float64}
+    turbidity_missing_weight::OptionalValue{Float64}
+    turbidity_weight::OptionalValue{Float64}
+    waves_height_direction::OptionalValue{String}
+    waves_height_band_peak::OptionalValue{Float64}
+    waves_height_missing_weight::OptionalValue{Float64}
+    waves_height_weight::OptionalValue{Float64}
+    waves_period_direction::OptionalValue{String}
+    waves_period_band_peak::OptionalValue{Float64}
+    waves_period_missing_weight::OptionalValue{Float64}
+    waves_period_weight::OptionalValue{Float64}
     "Spatial scope (bbox or polygon) narrowing the assessment"
     scope::SpatialScopeInput
 end
@@ -577,6 +701,39 @@ struct FastSuitabilityAssessmentInput <: AbstractJobInput
     waves_height_max::OptionalValue{Float64}
     waves_period_min::OptionalValue{Float64}
     waves_period_max::OptionalValue{Float64}
+    # MCDA scoring config (Phase B) - see RegionalAssessmentInput for the rationale.
+    depth_direction::OptionalValue{String}
+    depth_band_peak::OptionalValue{Float64}
+    depth_missing_weight::OptionalValue{Float64}
+    depth_weight::OptionalValue{Float64}
+    high_tide_direction::OptionalValue{String}
+    high_tide_band_peak::OptionalValue{Float64}
+    high_tide_missing_weight::OptionalValue{Float64}
+    high_tide_weight::OptionalValue{Float64}
+    low_tide_direction::OptionalValue{String}
+    low_tide_band_peak::OptionalValue{Float64}
+    low_tide_missing_weight::OptionalValue{Float64}
+    low_tide_weight::OptionalValue{Float64}
+    rugosity_direction::OptionalValue{String}
+    rugosity_band_peak::OptionalValue{Float64}
+    rugosity_missing_weight::OptionalValue{Float64}
+    rugosity_weight::OptionalValue{Float64}
+    slope_direction::OptionalValue{String}
+    slope_band_peak::OptionalValue{Float64}
+    slope_missing_weight::OptionalValue{Float64}
+    slope_weight::OptionalValue{Float64}
+    turbidity_direction::OptionalValue{String}
+    turbidity_band_peak::OptionalValue{Float64}
+    turbidity_missing_weight::OptionalValue{Float64}
+    turbidity_weight::OptionalValue{Float64}
+    waves_height_direction::OptionalValue{String}
+    waves_height_band_peak::OptionalValue{Float64}
+    waves_height_missing_weight::OptionalValue{Float64}
+    waves_height_weight::OptionalValue{Float64}
+    waves_period_direction::OptionalValue{String}
+    waves_period_band_peak::OptionalValue{Float64}
+    waves_period_missing_weight::OptionalValue{Float64}
+    waves_period_weight::OptionalValue{Float64}
     # Unique to suitability assessment
     threshold::OptionalValue{Int64}
     "Length dimension of target polygon"
@@ -636,6 +793,10 @@ function handle_job(
     regional_assessment_filename = build_fast_regional_assessment_file_path(
         params, input.scope; ext="tiff", cache_path=context.cache_path
     )
+    # Continuous MCDA suitability score band (Phase B) - sibling COG, ranking only.
+    score_assessment_filename = build_fast_regional_assessment_file_path(
+        params, input.scope; ext="tiff", cache_path=context.cache_path, infix="_score"
+    )
     @debug "COG File name: $(regional_assessment_filename)"
 
     if !isfile(regional_assessment_filename)
@@ -653,21 +814,37 @@ function handle_job(
         @info "Cache hit - skipping fast regional assessment process and re-uploading to output!"
     end
 
+    if !isfile(score_assessment_filename)
+        @debug "$(now()) : Fast-scoring region $(params.region) (MCDA suitability band)"
+        scored = ReefGuide.assess_region_score(params)
+        @debug "$(now()) : Writing COG of MCDA score to $(score_assessment_filename)"
+        ReefGuide._write_cog(
+            score_assessment_filename, scored; tile_size=(256,), num_threads=4
+        )
+        @debug "$(now()) : Finished writing score cog "
+    else
+        @info "Cache hit - skipping MCDA score band and re-uploading to output!"
+    end
+
     # Now upload this to s3
     client = S3StorageClient(; region=context.aws_region, s3_endpoint=context.s3_endpoint)
 
     # Output file names
     output_file_name_rel = "fast_regional_assessment.tiff"
     full_s3_target = "$(context.storage_uri)/$(output_file_name_rel)"
+    score_file_name_rel = "fast_regional_assessment_score.tiff"
+    score_s3_target = "$(context.storage_uri)/$(score_file_name_rel)"
     @debug "File paths:" relative = output_file_name_rel absolute = full_s3_target
 
     @debug "$(now()) : Initiating file upload"
     upload_file(client, regional_assessment_filename, full_s3_target)
+    upload_file(client, score_assessment_filename, score_s3_target)
     @debug "$(now()) : File upload completed"
 
     @debug "Finished fast regional assessment job."
     return RegionalAssessmentOutput(
-        output_file_name_rel
+        output_file_name_rel,
+        score_file_name_rel
     )
 end
 

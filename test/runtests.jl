@@ -97,10 +97,14 @@ end
 @testset "regional_job_from_fast_regional_job / suitability_job_from_fast_suitability_job" begin
     scope = ReefGuideWorker.BBoxScopeInput("bbox", (1.0, 2.0, 3.0, 4.0))
 
+    # 32 = 8 criteria x 4 MCDA scoring props (Phase B), all defaulted to nothing.
+    mcda_nothings = fill(nothing, 32)
+
     fast_regional = ReefGuideWorker.FastRegionalAssessmentInput(
         "test-region", "slopes",
         1.0, 2.0, nothing, nothing, nothing, nothing, nothing, nothing,
         nothing, nothing, nothing, nothing, nothing, nothing, nothing, nothing,
+        mcda_nothings...,
         scope
     )
     regional = ReefGuideWorker.regional_job_from_fast_regional_job(fast_regional)
@@ -113,6 +117,7 @@ end
         "test-region", "slopes",
         1.0, 2.0, nothing, nothing, nothing, nothing, nothing, nothing,
         nothing, nothing, nothing, nothing, nothing, nothing, nothing, nothing,
+        mcda_nothings...,
         50, 100, 200,
         scope
     )
@@ -123,6 +128,66 @@ end
     @test suitability.threshold == 50
     @test suitability.x_dist == 100
     @test suitability.y_dist == 200
+
+    # Phase B: a per-criterion scoring override survives the fast -> regular conversion.
+    fast_regional_scored = ReefGuideWorker.FastRegionalAssessmentInput(
+        "test-region", "slopes",
+        1.0, 2.0, nothing, nothing, nothing, nothing, nothing, nothing,
+        nothing, nothing, nothing, nothing, nothing, nothing, nothing, nothing,
+        "band", -5.0, 0.25, 2.0,  # depth_{direction,band_peak,missing_weight,weight}
+        fill(nothing, 28)...,
+        scope
+    )
+    regional_scored = ReefGuideWorker.regional_job_from_fast_regional_job(
+        fast_regional_scored
+    )
+    @test regional_scored.depth_direction == "band"
+    @test regional_scored.depth_band_peak == -5.0
+    @test regional_scored.depth_missing_weight == 0.25
+    @test regional_scored.depth_weight == 2.0
+end
+
+@testset "parse_mcda_direction (Phase B)" begin
+    @test ReefGuideWorker.parse_mcda_direction("band", "Depth") === :band
+    @test ReefGuideWorker.parse_mcda_direction("lower_is_better", "Slope") ===
+        :lower_is_better
+    @test ReefGuideWorker.parse_mcda_direction("higher_is_better", "WavesTp") ===
+        :higher_is_better
+    @test_throws ErrorException ReefGuideWorker.parse_mcda_direction("sideways", "Depth")
+end
+
+@testset "MCDA scoring config in criteria cache key (Phase B)" begin
+    # Guarded: the pinned ReefGuide.jl must carry Phase A (CriteriaMetadata.direction
+    # + the BoundedCriteria scoring fields) for this to run. Skips cleanly on the
+    # pre-Phase-A pin so `Pkg.test()` stays green until the pin is bumped.
+    if !hasfield(ReefGuide.CriteriaMetadata, :direction)
+        @test_skip "pinned ReefGuide.jl predates Phase A - MCDA cache-key test skipped"
+    else
+        slope = ReefGuide.ASSESSMENT_CRITERIA["Slope"]
+        mk =
+            (; kw...) -> ReefGuide.BoundedCriteriaDict(
+                "Slope" => ReefGuide.BoundedCriteria(;
+                    metadata=slope, bounds=ReefGuide.Bounds(; min=0.0, max=40.0),
+                    kw...
+                )
+            )
+        base = mk()
+        heavier = mk(; weight=2.0f0)
+        excluded = mk(; missing_weight=-5.0f0)
+        flipped = mk(; direction=:higher_is_better)
+
+        comps = ReefGuideWorker.get_hash_components_from_regional_criteria
+        hash = c -> ReefGuideWorker.build_hash_from_components(comps(c))
+
+        # Two rulesets differing only in a scoring field must not collide.
+        @test hash(base) != hash(heavier)
+        @test hash(base) != hash(excluded)
+        @test hash(base) != hash(flipped)
+        # Identical config is stable.
+        @test hash(base) == hash(mk())
+        # The scoring fields actually appear in the component list.
+        @test any(occursin("lower_is_better"), comps(base))
+    end
 end
 
 @testset "scope cache-key correctness" begin
