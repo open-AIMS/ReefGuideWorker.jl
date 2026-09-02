@@ -19,7 +19,15 @@ function get_hash_components_from_regional_criteria(
         components = vcat(components,
             haskey(criteria, id) ?
             [
-                id, string(criteria[id].bounds.min), string(criteria[id].bounds.max)
+                id,
+                string(criteria[id].bounds.min),
+                string(criteria[id].bounds.max),
+                # MCDA scoring config (Phase B) - two jobs differing only in
+                # scoring config must not collide on a cached COG.
+                string(criteria[id].direction),
+                string(criteria[id].band_peak),
+                string(criteria[id].missing_weight),
+                string(criteria[id].weight)
             ] : []
         )
     end

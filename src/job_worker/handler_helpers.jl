@@ -4,6 +4,29 @@ Helpers for job handlers which interrupt main workflow.
 For example, converting between job system interfaces and assessment interfaces.
 """
 
+"MCDA preference directions accepted on the request path (Phase B)."
+const VALID_MCDA_DIRECTIONS = (:lower_is_better, :higher_is_better, :band)
+
+"""
+Parse a user-supplied MCDA `direction` string into a `Symbol`, rejecting the job
+with a clear error if it is not one of [`VALID_MCDA_DIRECTIONS`](@ref). The Zod
+enum in `@reefguide/types` is the only other guard, so an out-of-band value that
+reaches the worker (e.g. a direct API call) must fail loudly rather than silently
+falling back to the criterion default.
+"""
+function parse_mcda_direction(raw::AbstractString, criteria_id)::Symbol
+    sym = Symbol(raw)
+    if sym ∉ VALID_MCDA_DIRECTIONS
+        throw(
+            ErrorException(
+                "Invalid MCDA direction '$(raw)' for criteria $(criteria_id); expected one of " *
+                join(string.(VALID_MCDA_DIRECTIONS), ", ")
+            )
+        )
+    end
+    return sym
+end
+
 """
 Build regional assessment parameters from user input and regional data.
 
@@ -46,11 +69,28 @@ function build_regional_assessment_parameters(
 
     for criteria in ReefGuide.ASSESSMENT_CRITERIA_LIST
         criteria_id = criteria.id
-        user_min = getproperty(input, Symbol("$(criteria.payload_prefix)min"))
-        user_max = getproperty(input, Symbol("$(criteria.payload_prefix)max"))
+        prefix = criteria.payload_prefix
+        user_min = getproperty(input, Symbol("$(prefix)min"))
+        user_max = getproperty(input, Symbol("$(prefix)max"))
+        # MCDA scoring config (Phase B) - each optional, nothing => criterion default
+        user_direction = getproperty(input, Symbol("$(prefix)direction"))
+        user_band_peak = getproperty(input, Symbol("$(prefix)band_peak"))
+        user_missing_weight = getproperty(input, Symbol("$(prefix)missing_weight"))
+        user_weight = getproperty(input, Symbol("$(prefix)weight"))
 
-        # only include a criteria if its min | max is specified.
-        if (isnothing(user_min) && isnothing(user_max))
+        # Include a criterion if the user touched either its bounds or its scoring
+        # config; a scoring-only override still needs the criterion in the ruleset.
+        if all(
+            isnothing,
+            (
+                user_min,
+                user_max,
+                user_direction,
+                user_band_peak,
+                user_missing_weight,
+                user_weight
+            )
+        )
             continue
         end
 
@@ -73,9 +113,32 @@ function build_regional_assessment_parameters(
             throw(ErrorException("merge_bounds failed for $(criteria_id) criteria"))
         end
 
+        direction =
+            isnothing(user_direction) ? criteria.direction :
+            parse_mcda_direction(user_direction, criteria_id)
+        band_peak =
+            isnothing(user_band_peak) ? criteria.band_peak : Float64(user_band_peak)
+
+        # A `band` preference needs a peak; if the request overrides `direction` to
+        # `band` for a criterion whose metadata carries no `band_peak`, reject
+        # rather than emit a silently degenerate score (mirrors decision D).
+        if direction === :band && isnothing(band_peak)
+            throw(
+                ErrorException(
+                    "MCDA direction 'band' for criteria $(criteria_id) requires a band_peak; " *
+                    "none supplied and the criterion has no default"
+                )
+            )
+        end
+
         regional_criteria[criteria_id] = ReefGuide.BoundedCriteria(;
             metadata=criteria,
-            bounds=merged
+            bounds=merged,
+            direction=direction,
+            band_peak=band_peak,
+            missing_weight=isnothing(user_missing_weight) ? 0.0f0 :
+                           Float32(user_missing_weight),
+            weight=isnothing(user_weight) ? 1.0f0 : Float32(user_weight)
         )
     end
 
@@ -155,7 +218,40 @@ function regional_job_from_suitability_job(
         suitability_job.waves_height_min,
         suitability_job.waves_height_max,
         suitability_job.waves_period_min,
-        suitability_job.waves_period_max
+        suitability_job.waves_period_max,
+        # MCDA scoring config (Phase B) - trailing block, must match struct field order
+        suitability_job.depth_direction,
+        suitability_job.depth_band_peak,
+        suitability_job.depth_missing_weight,
+        suitability_job.depth_weight,
+        suitability_job.high_tide_direction,
+        suitability_job.high_tide_band_peak,
+        suitability_job.high_tide_missing_weight,
+        suitability_job.high_tide_weight,
+        suitability_job.low_tide_direction,
+        suitability_job.low_tide_band_peak,
+        suitability_job.low_tide_missing_weight,
+        suitability_job.low_tide_weight,
+        suitability_job.rugosity_direction,
+        suitability_job.rugosity_band_peak,
+        suitability_job.rugosity_missing_weight,
+        suitability_job.rugosity_weight,
+        suitability_job.slope_direction,
+        suitability_job.slope_band_peak,
+        suitability_job.slope_missing_weight,
+        suitability_job.slope_weight,
+        suitability_job.turbidity_direction,
+        suitability_job.turbidity_band_peak,
+        suitability_job.turbidity_missing_weight,
+        suitability_job.turbidity_weight,
+        suitability_job.waves_height_direction,
+        suitability_job.waves_height_band_peak,
+        suitability_job.waves_height_missing_weight,
+        suitability_job.waves_height_weight,
+        suitability_job.waves_period_direction,
+        suitability_job.waves_period_band_peak,
+        suitability_job.waves_period_missing_weight,
+        suitability_job.waves_period_weight
     )
 end
 
@@ -225,7 +321,40 @@ function regional_job_from_fast_regional_job(
         fast_job.waves_height_min,
         fast_job.waves_height_max,
         fast_job.waves_period_min,
-        fast_job.waves_period_max
+        fast_job.waves_period_max,
+        # MCDA scoring config (Phase B) - trailing block, must match struct field order
+        fast_job.depth_direction,
+        fast_job.depth_band_peak,
+        fast_job.depth_missing_weight,
+        fast_job.depth_weight,
+        fast_job.high_tide_direction,
+        fast_job.high_tide_band_peak,
+        fast_job.high_tide_missing_weight,
+        fast_job.high_tide_weight,
+        fast_job.low_tide_direction,
+        fast_job.low_tide_band_peak,
+        fast_job.low_tide_missing_weight,
+        fast_job.low_tide_weight,
+        fast_job.rugosity_direction,
+        fast_job.rugosity_band_peak,
+        fast_job.rugosity_missing_weight,
+        fast_job.rugosity_weight,
+        fast_job.slope_direction,
+        fast_job.slope_band_peak,
+        fast_job.slope_missing_weight,
+        fast_job.slope_weight,
+        fast_job.turbidity_direction,
+        fast_job.turbidity_band_peak,
+        fast_job.turbidity_missing_weight,
+        fast_job.turbidity_weight,
+        fast_job.waves_height_direction,
+        fast_job.waves_height_band_peak,
+        fast_job.waves_height_missing_weight,
+        fast_job.waves_height_weight,
+        fast_job.waves_period_direction,
+        fast_job.waves_period_band_peak,
+        fast_job.waves_period_missing_weight,
+        fast_job.waves_period_weight
     )
 end
 
@@ -256,6 +385,39 @@ function suitability_job_from_fast_suitability_job(
         fast_job.waves_height_max,
         fast_job.waves_period_min,
         fast_job.waves_period_max,
+        # MCDA scoring config (Phase B) - trailing block, before the suitability tail
+        fast_job.depth_direction,
+        fast_job.depth_band_peak,
+        fast_job.depth_missing_weight,
+        fast_job.depth_weight,
+        fast_job.high_tide_direction,
+        fast_job.high_tide_band_peak,
+        fast_job.high_tide_missing_weight,
+        fast_job.high_tide_weight,
+        fast_job.low_tide_direction,
+        fast_job.low_tide_band_peak,
+        fast_job.low_tide_missing_weight,
+        fast_job.low_tide_weight,
+        fast_job.rugosity_direction,
+        fast_job.rugosity_band_peak,
+        fast_job.rugosity_missing_weight,
+        fast_job.rugosity_weight,
+        fast_job.slope_direction,
+        fast_job.slope_band_peak,
+        fast_job.slope_missing_weight,
+        fast_job.slope_weight,
+        fast_job.turbidity_direction,
+        fast_job.turbidity_band_peak,
+        fast_job.turbidity_missing_weight,
+        fast_job.turbidity_weight,
+        fast_job.waves_height_direction,
+        fast_job.waves_height_band_peak,
+        fast_job.waves_height_missing_weight,
+        fast_job.waves_height_weight,
+        fast_job.waves_period_direction,
+        fast_job.waves_period_band_peak,
+        fast_job.waves_period_missing_weight,
+        fast_job.waves_period_weight,
         fast_job.threshold,
         fast_job.x_dist,
         fast_job.y_dist
@@ -368,12 +530,13 @@ function build_fast_regional_assessment_file_path(
     params::ReefGuide.RegionalAssessmentParameters,
     scope::SpatialScopeInput;
     ext::String,
-    cache_path::String
+    cache_path::String,
+    infix::String=""
 )::String
     @debug "Building file path for fast regional assessment cache" region = params.region ext
 
     param_hash = fast_regional_assessment_params_hash(params, scope)
-    filename = "$(param_hash)_$(params.region)_fast_regional_assessment.$(ext)"
+    filename = "$(param_hash)_$(params.region)_fast_regional_assessment$(infix).$(ext)"
     file_path = joinpath(cache_path, filename)
 
     @debug "Built fast regional assessment file path" file_path region = params.region hash =
@@ -476,12 +639,13 @@ String path to cache file location.
 function build_regional_assessment_file_path(
     params::ReefGuide.RegionalAssessmentParameters;
     ext::String,
-    cache_path::String
+    cache_path::String,
+    infix::String=""
 )::String
     @debug "Building file path for regional assessment cache" region = params.region ext
 
     param_hash = regional_assessment_params_hash(params)
-    filename = "$(param_hash)_$(params.region)_regional_assessment.$(ext)"
+    filename = "$(param_hash)_$(params.region)_regional_assessment$(infix).$(ext)"
     file_path = joinpath(cache_path, filename)
 
     @debug "Built regional assessment file path" file_path region = params.region hash =
@@ -563,7 +727,10 @@ function build_data_specification_payload_for_region(;
         # Determine default bounds (use metadata default_bounds if available, otherwise use main bounds)
         default_bounds = something(metadata.default_bounds, bounds)
 
-        # Create the criteria input struct
+        # Create the criteria input struct.
+        # MCDA scoring defaults (Phase B): direction/band_peak come from the
+        # criterion metadata; missing_weight/weight are the BoundedCriteria
+        # constructor defaults (no per-criterion override exists in metadata yet).
         criteria_input = UpdateCriteriaInput(;
             name=criteria_name,
             display_title=metadata.display_label,
@@ -575,7 +742,11 @@ function build_data_specification_payload_for_region(;
             min_val=bounds.min,
             max_val=bounds.max,
             default_min_val=default_bounds.min,
-            default_max_val=default_bounds.max
+            default_max_val=default_bounds.max,
+            default_direction=string(metadata.direction),
+            default_band_peak=metadata.band_peak,
+            default_missing_weight=0.0,
+            default_weight=1.0
         )
 
         push!(criteria_list, criteria_input)
