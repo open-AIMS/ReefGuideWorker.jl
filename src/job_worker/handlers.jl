@@ -1137,7 +1137,17 @@ function handle_job(
         @debug "Computed stats for criteria" criteria_id valid_count = length(valid_vals) nodata_count
     end
 
-    computed_at = Dates.format(now(), "yyyy-mm-ddTHH:MM:SSZ")
+    # `now()` returns local time, not UTC - use `now(Dates.UTC)` so the trailing "Z"
+    # (appended below) is actually true.
+    #
+    # The "Z" is appended as a separate literal string rather than folded into the
+    # Dates.format pattern (e.g. "...SSZ"): since TimeZones.jl entered the dependency
+    # tree (Arrow.jl -> TimeZones.jl), a "Z" inside a DateFormat pattern is parsed as a
+    # real directive expecting a `TimeZones.ZonedDateTime` - even single-quoted
+    # ("...SS'Z'") still resolves to that directive rather than a literal character -
+    # and formatting a plain `DateTime` through it throws `FieldError: type DateTime has
+    # no field zone` instead of emitting a literal "Z".
+    computed_at = Dates.format(now(Dates.UTC), "yyyy-mm-ddTHH:MM:SS") * "Z"
 
     @info "Polygon criteria stats task complete" criteria_computed = length(stats)
     return PolygonCriteriaStatsOutput(stats, computed_at, input.criteria)
